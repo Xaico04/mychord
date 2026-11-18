@@ -53,11 +53,11 @@ class MainActivity : Activity() {
         checkUpdate(true)
     }
     override fun onStart() {
-        super.onStart(); synth.start()
+        super.onStart(); synth.start(); view.midiStart()
         if (orient.canDetectOrientation()) orient.enable()
     }
     override fun onStop() {
-        orient.disable(); synth.gate = false; synth.stop(); super.onStop()
+        orient.disable(); view.midiStop(); synth.allOff(); synth.stop(); super.onStop()
     }
 
     private fun toggleRotate() {
