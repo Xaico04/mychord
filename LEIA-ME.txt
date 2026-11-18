@@ -6,13 +6,17 @@ HiChord para Android (app nativo) - como gerar o APK sem instalar nada
 3. Abra a aba Actions > "Build APK" e espere uns 5 a 10 minutos.
 4. Baixe o artefato "HiChord-apk" (zip com o app-debug.apk) e instale no celular.
 
-Tela: abre sempre deitado. Toque em "Girar" (ao lado do titulo) para alternar com a vertical;
-depois de girar o celular de verdade, a tela acompanha o sensor nas duas posicoes.
+Tela: abre sempre deitado e so gira para vertical se a rotacao automatica do celular estiver LIGADA.
+Volume: o app sempre toca em 100%; use os botoes de volume do celular.
 Acordes: arraste o dedo pelos pads sem soltar para trocar de acorde.
-Tema: botao "Tema" escolhe uma imagem da galeria como fundo e as cores do app se adaptam a ela.
-"Padrao" volta ao visual original.
+Botao "?" (canto superior direito): ajuda por secao (Inicio, Acordes, Modos, Efeitos, Bateria, Loop, MIDI, Controle).
 
- | Y = proximo modo de toque
+CONTROLE (Bluetooth)
+- Tocar: LB, RB, LT, RT, X, A, B = acordes I a VII. Analogico esquerdo = variacoes. Y = proximo modo. Start = liga/desliga o ritmo.
+- Direcional: esquerda/direita = Tom -/+, cima = Maior/Menor, baixo = Onda.
+- R3 = proxima pagina, L3 = pagina anterior.
+- Select = modo EDITAR: o direcional move uma moldura branca por todos os botoes, passos e pistas da Bateria e barra
+  de cima; A confirma; B ou Select sai (no EDITAR, A e B nao tocam acorde).
 Fone com DAC USB: conecte antes de abrir o app; o Android usa o DAC sozinho.
 
 ATUALIZAR PELO APP
@@ -35,16 +39,16 @@ Modos (botao MODO, na ultima celula da grade de pads; no controle, tecla Y):
   Analogico: cima = oitava acima, baixo = oitava abaixo, direita = vibrato, esquerda = 2 oitavas acima.
 Efeitos e ajustes (botao FX, ao lado de Atualizar; "Voltar" fecha a pagina):
 - Reverb, Delay (eco ping-pong), Chorus e Flanger: cada toque muda a intensidade (off > 30% > 60% > 100% > off).
-- Arp: direcao (Sobe, Desce, Vai-vem, Aleatorio) e andamento (80 a 180 bpm).
+- Arp: direcao (Sobe, Desce, Vai-vem, Aleatorio) e andamento (70 a 180 bpm).
 - Eco: tempo do delay (150, 250, 350 ou 450 ms).
 Tudo fica salvo e volta igual na proxima vez que abrir o app.
 
 ETAPA 2: BATERIA, LOOPER, SEQUENCER, OUVIDO E MIDI
 O botao do topo (ao lado de Atualizar) troca a pagina dos botoes: Menu > FX > Loop > Bateria > MIDI.
-(No controle: R3 troca a pagina, Start liga/desliga o transporte.)
+(No controle: R3/L3 trocam a pagina; Select liga o modo EDITAR para mexer nos botoes.)
 
 BATERIA (pagina "Bateria")
-- O visor vira a grade de 16 passos da pista escolhida. Toque nos passos para ligar/desligar.
+- O visor vira a grade de 16 passos. No topo ficam as 8 pistas: toque no nome para escolher e toque nos passos para ligar/desligar.
 - Pistas: Kick, Caixa, Hat fechado, Hat aberto, Palma, Tom, Perc e Melodia (a Melodia aceita valores 1 a 8:
   1-4 = notas do acorde, 5-8 = as mesmas uma oitava acima; toque varias vezes para trocar).
 - 7 kits: 808, Rock, Lo-Fi, Techno, Jazz, Eletro, Acustico. 7 ritmos prontos (Vazio, Rock, Hip-hop, Disco, Techno, Reggae, Funk).
