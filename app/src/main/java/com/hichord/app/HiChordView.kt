@@ -243,7 +243,7 @@ class HiChordView(ctx: Context, private val synth: Synth) : View(ctx) {
     private fun actMidi(i: Int) {
         when (i) {
             0 -> midi.cycle()
-            1 -> midi.setChannel((midi.channel + 1) % 16)
+            1 -> midi.changeChannel((midi.channel + 1) % 16)
             2 -> midi.setSend(!midi.sendOn)
             3 -> midi.setRecv(!midi.recvOn)
             4 -> midi.setClock(!midi.clockOn)

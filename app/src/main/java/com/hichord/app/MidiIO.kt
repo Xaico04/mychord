@@ -101,7 +101,7 @@ class MidiIO(ctx: Context, private val synth: Synth) {
     fun setSend(on: Boolean) { if (!on) panic(); sendOn = on; apply() }
     fun setRecv(on: Boolean) { recvOn = on }
     fun setClock(on: Boolean) { clockOn = on; apply() }
-    fun setChannel(c: Int) { panic(); channel = c.coerceIn(0, 15) }
+    fun changeChannel(c: Int) { panic(); channel = c.coerceIn(0, 15) }
 
     fun start() {
         val m = mm ?: return
