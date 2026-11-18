@@ -8,6 +8,9 @@ class HiChordView(ctx: Context, private val synth: Synth) : View(ctx) {
     var onTheme: () -> Unit = {}
     var onResetTheme: () -> Unit = {}
     var onRotate: () -> Unit = {}
+    var onUpdate: () -> Unit = {}
+    private val updR = RectF(); private var updLabel = "Atualizar"; private var updHot = false
+    fun setUpdate(label: String, hot: Boolean) { updLabel = label; updHot = hot; invalidate() }
 
     private val NN = arrayOf("C", "C♯", "D", "D♯", "E", "F", "F♯", "G", "G♯", "A", "A♯", "B")
     private val MAJ = intArrayOf(0, 2, 4, 5, 7, 9, 11)
@@ -221,6 +224,7 @@ class HiChordView(ctx: Context, private val synth: Synth) : View(ctx) {
         val m = dp(12f); val W = w.toFloat(); val H = h.toFloat()
         val vt = m + dp(24f)
         rotR.set(dp(96f), dp(6f), dp(168f), dp(34f))
+        updR.set(dp(176f), dp(6f), dp(284f), dp(34f))
         val gap = m * 0.5f
         val bt: Float; val bx0: Float; val bw: Float; val bh: Float
         val pTop: Float; val pLeft: Float; val pw: Float; val ph: Float
@@ -268,6 +272,7 @@ class HiChordView(ctx: Context, private val synth: Synth) : View(ctx) {
         val pi = hitPad(x, y)
         if (pi >= 0) { ptrPad[id] = pi; syncTouch(); return }
         if (rotR.contains(x, y)) { onRotate(); return }
+        if (updR.contains(x, y)) { onUpdate(); return }
         if (hypot(x - jcx, y - jcy) < jr * 1.3f) { joyPtr = id; joy(x, y); return }
         for (i in 0 until NB) if (btnR[i].contains(x, y)) { act(i); return }
         if (padArea.contains(x, y)) ptrPad[id] = -1
@@ -322,7 +327,9 @@ class HiChordView(ctx: Context, private val synth: Synth) : View(ctx) {
         txt("HiChord", dp(14f), dp(26f), 18f, Color.WHITE, Paint.Align.LEFT, false, true)
         rr(rotR, dp(14f), panelC)
         txt("Girar", rotR.centerX(), rotR.centerY() + dp(4f), 12f, Color.WHITE, Paint.Align.CENTER)
-        txt(if (padSeen) "🎮 controle" else "🎧 toque / controle", width - dp(14f), dp(26f), 12f, accent, Paint.Align.RIGHT)
+        rr(updR, dp(14f), if (updHot) accent else panelC)
+        txt(updLabel, updR.centerX(), updR.centerY() + dp(4f), 12f, if (updHot) onAccent else Color.WHITE, Paint.Align.CENTER, false, updHot, updR.width() - dp(10f))
+        txt(if (padSeen) "🎮" else "🎧", width - dp(14f), dp(26f), 16f, accent, Paint.Align.RIGHT)
         // visor
         rr(visor, dp(18f), visorC)
         p.style = Paint.Style.STROKE; p.strokeWidth = 1f; p.color = gridC
