@@ -12,9 +12,7 @@ Acordes: arraste o dedo pelos pads sem soltar para trocar de acorde.
 Tema: botao "Tema" escolhe uma imagem da galeria como fundo e as cores do app se adaptam a ela.
 "Padrao" volta ao visual original.
 
-Controle (acordes): LB=C  RB=D  LT=E  RT=F  X=G  A=A  B=B
-analogico esquerdo = 7a, sus4, add9, inversao | direcional esq/dir = tom | cima/baixo = volume
-Select = onda | L3 = maior/menor
+ | Y = proximo modo de toque
 Fone com DAC USB: conecte antes de abrir o app; o Android usa o DAC sozinho.
 
 ATUALIZAR PELO APP
@@ -24,3 +22,51 @@ ATUALIZAR PELO APP
 - Cada build vira uma Release com o HiChord.apk. No app, o botao "Atualizar" baixa o APK inteiro
   e abre o instalador (o Android sempre pede uma confirmacao). Quando ha versao nova o botao fica colorido com "●".
 - Guarde o arquivo hichord.p12: sem ele nao da para atualizar por cima (so desinstalando).
+
+ETAPA 1: MODOS DE TOQUE E EFEITOS
+Modos (botao MODO, na ultima celula da grade de pads; no controle, tecla Y):
+- Play: acorde sustentado enquanto o pad esta apertado.
+- Strum: as notas do acorde entram em sequencia e soam como corda (decaem sozinhas).
+  Cada toque alterna entre palhetada para baixo e para cima.
+- Arpejo: percorre o acorde em duas oitavas enquanto o pad esta apertado.
+- Drone: o acorde toca como no Play e o grave (fundamental + quinta) continua soando
+  depois de soltar o pad, deslizando para o proximo acorde. Troque de modo para parar.
+- Lead: cada pad vira um grau da escala (nota unica, com glissando ao trocar de pad).
+  Analogico: cima = oitava acima, baixo = oitava abaixo, direita = vibrato, esquerda = 2 oitavas acima.
+Efeitos e ajustes (botao FX, ao lado de Atualizar; "Voltar" fecha a pagina):
+- Reverb, Delay (eco ping-pong), Chorus e Flanger: cada toque muda a intensidade (off > 30% > 60% > 100% > off).
+- Arp: direcao (Sobe, Desce, Vai-vem, Aleatorio) e andamento (80 a 180 bpm).
+- Eco: tempo do delay (150, 250, 350 ou 450 ms).
+Tudo fica salvo e volta igual na proxima vez que abrir o app.
+
+ETAPA 2: BATERIA, LOOPER, SEQUENCER, OUVIDO E MIDI
+O botao do topo (ao lado de Atualizar) troca a pagina dos botoes: Menu > FX > Loop > Bateria > MIDI.
+(No controle: R3 troca a pagina, Start liga/desliga o transporte.)
+
+BATERIA (pagina "Bateria")
+- O visor vira a grade de 16 passos da pista escolhida. Toque nos passos para ligar/desligar.
+- Pistas: Kick, Caixa, Hat fechado, Hat aberto, Palma, Tom, Perc e Melodia (a Melodia aceita valores 1 a 8:
+  1-4 = notas do acorde, 5-8 = as mesmas uma oitava acima; toque varias vezes para trocar).
+- 7 kits: 808, Rock, Lo-Fi, Techno, Jazz, Eletro, Acustico. 7 ritmos prontos (Vazio, Rock, Hip-hop, Disco, Techno, Reggae, Funk).
+- Botoes: Kit, Pista, Tocar/Parar, BPM (70-180), Ritmo, Limpar pista, Loop (1, 2 ou 4 compassos), volume da bateria.
+- A bateria sai seca (sem reverb/delay) e fica salva ao fechar o app.
+
+LOOPER (pagina "Loop")
+- 6 faixas. Toque em T1..T6: grava no proximo inicio de compasso, durante 1 loop inteiro, e passa a tocar sozinha.
+  Toque de novo: muda/ativa. Faixa em gravacao ou aguardando: toque cancela.
+- Grava o som dos modos de toque ja com os efeitos (a bateria nao entra na gravacao: ela toca pelo sequenciador).
+- Andamento e tamanho do loop ficam travados enquanto houver faixa gravada: use "Limpar tudo" para liberar.
+- As gravacoes nao sao salvas ao fechar o app.
+
+MODOS NOVOS (botao MODO)
+- Sequencer: toque um acorde; a pista "Melodia" da bateria passa a tocar as notas dele no andamento. Liga o transporte sozinho.
+- Ouvido: o app toca a tonica e uma nota; voce responde tocando o pad do grau (I a VII). Toque no visor para ouvir de novo.
+  Dificuldade na pagina MIDI: Facil (graus I, III, V), Normal (7 graus), Dificil (referencia e um acorde, sem a tonica solta).
+
+MIDI (pagina "MIDI", USB-C com cabo OTG)
+- MIDI: toque para passar pelos dispositivos encontrados (teclado, interface, ou o proprio celular em modo MIDI USB
+  quando ligado a um computador). Depois do ultimo, desliga.
+- Saida: envia as notas tocadas (canal escolhido) e a bateria (canal 10, notas General MIDI).
+- Entrada: um teclado externo toca o som do app.
+- Clock: envia o relogio MIDI + Start/Stop do transporte (para DAWs e baterias externas).
+- Notas OFF: corta qualquer nota presa no aparelho externo.
