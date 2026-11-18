@@ -2,70 +2,84 @@ package com.hichord.app
 import android.app.Activity
 import android.content.Intent
 import android.content.pm.ActivityInfo
-import android.content.res.Configuration
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.graphics.Matrix
+import android.database.ContentObserver
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import androidx.core.content.FileProvider
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import java.io.File
 import android.view.*
 import android.view.InputDevice
 import android.widget.Toast
-import kotlin.math.max
 
 class MainActivity : Activity() {
     private val synth = Synth()
     private lateinit var view: HiChordView
-    private lateinit var orient: OrientationEventListener
     private val prefs by lazy { getSharedPreferences("hichord", MODE_PRIVATE) }
-    private val reqTheme = 42
-    // abre sempre deitado; depois que o celular for girado de verdade, acompanha o sensor
-    private var wantLandscape = true
-    private var armed = true
     private var upd: Updater.Info? = null
     private var updBusy = false
+    // avisa quando o usuario liga/desliga a rotacao automatica do celular
+    private val rotObs = object : ContentObserver(Handler(Looper.getMainLooper())) {
+        override fun onChange(selfChange: Boolean) { applyRotation() }
+    }
 
     override fun onCreate(b: Bundle?) {
         super.onCreate(b)
         window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        // tela cheia, usando o espaco ao redor do furo da camera (o app respeita a area segura)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        if (Build.VERSION.SDK_INT >= 28) {
+            val lp = window.attributes
+            lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            window.attributes = lp
+        }
+        prefs.edit().remove("theme_uri").apply()   // tema removido: limpa o que ficou salvo
         view = HiChordView(this, synth)
-        view.onTheme = { pickTheme() }
-        view.onResetTheme = { prefs.edit().remove("theme_uri").apply(); view.applyTheme(null) }
-        view.onRotate = { toggleRotate() }
         view.onUpdate = { onUpdatePressed() }
         setContentView(view)
-        orient = object : OrientationEventListener(this) {
-            override fun onOrientationChanged(o: Int) {
-                if (!armed || o == OrientationEventListener.ORIENTATION_UNKNOWN) return
-                val land = (o in 60..120) || (o in 240..300)
-                val port = o <= 30 || o >= 330 || (o in 150..210)
-                if ((wantLandscape && land) || (!wantLandscape && port)) {
-                    requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
-                    armed = false
-                }
-            }
-        }
-        prefs.getString("theme_uri", null)?.let { loadTheme(Uri.parse(it), false) }
+        hideBars()
+        applyRotation()
         checkUpdate(true)
     }
     override fun onStart() {
         super.onStart(); synth.start(); view.midiStart()
-        if (orient.canDetectOrientation()) orient.enable()
+        applyRotation()
+        try {
+            contentResolver.registerContentObserver(Settings.System.getUriFor(Settings.System.ACCELEROMETER_ROTATION), false, rotObs)
+        } catch (e: Exception) {}
     }
     override fun onStop() {
-        orient.disable(); view.midiStop(); synth.allOff(); synth.stop(); super.onStop()
+        try { contentResolver.unregisterContentObserver(rotObs) } catch (e: Exception) {}
+        view.midiStop(); synth.allOff(); synth.stop(); super.onStop()
+    }
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) hideBars()
+    }
+    @Suppress("DEPRECATION")
+    override fun onBackPressed() {
+        if (!view.closeHelp()) super.onBackPressed()
     }
 
-    private fun toggleRotate() {
-        val isLand = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-        wantLandscape = !isLand
-        armed = true
-        requestedOrientation = if (wantLandscape) ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-        else ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+    private fun hideBars() {
+        val c = WindowInsetsControllerCompat(window, window.decorView)
+        c.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        c.hide(WindowInsetsCompat.Type.systemBars())
+    }
+
+    // Sempre deitado. So gira para vertical se a rotacao automatica do celular estiver LIGADA.
+    private fun autoRotateOn(): Boolean = try {
+        Settings.System.getInt(contentResolver, Settings.System.ACCELEROMETER_ROTATION, 0) == 1
+    } catch (e: Exception) { false }
+    private fun applyRotation() {
+        requestedOrientation = if (autoRotateOn()) ActivityInfo.SCREEN_ORIENTATION_SENSOR
+        else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
     }
 
     // ---------- atualizacao pelo app ----------
@@ -134,59 +148,6 @@ class MainActivity : Activity() {
             }
             startActivity(i)
         } catch (e: Exception) { toast("Não consegui abrir o instalador.") }
-    }
-
-    // ---------- tema (imagem de fundo) ----------
-    private fun pickTheme() {
-        val i = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-            addCategory(Intent.CATEGORY_OPENABLE)
-            type = "image/*"
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION)
-        }
-        try { startActivityForResult(i, reqTheme) }
-        catch (e: Exception) { Toast.makeText(this, "Não achei um seletor de imagens", Toast.LENGTH_SHORT).show() }
-    }
-    override fun onActivityResult(req: Int, res: Int, data: Intent?) {
-        super.onActivityResult(req, res, data)
-        if (req == reqTheme && res == RESULT_OK) {
-            val u = data?.data ?: return
-            try { contentResolver.takePersistableUriPermission(u, Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (e: Exception) {}
-            loadTheme(u, true)
-        }
-    }
-    private fun loadTheme(uri: Uri, save: Boolean) {
-        Thread {
-            val bmp = decode(uri)
-            runOnUiThread {
-                if (bmp != null) {
-                    view.applyTheme(bmp)
-                    if (save) prefs.edit().putString("theme_uri", uri.toString()).apply()
-                } else if (save) {
-                    Toast.makeText(this, "Não consegui abrir essa imagem", Toast.LENGTH_SHORT).show()
-                }
-            }
-        }.start()
-    }
-    private fun decode(uri: Uri): Bitmap? {
-        try {
-            val o = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-            contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, o) }
-            var s = 1
-            while (max(o.outWidth, o.outHeight) / s > 1600) s *= 2
-            val o2 = BitmapFactory.Options().apply { inSampleSize = s }
-            var bmp = contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, o2) } ?: return null
-            var rot = 1
-            try {
-                contentResolver.openInputStream(uri)?.use {
-                    rot = android.media.ExifInterface(it).getAttributeInt(android.media.ExifInterface.TAG_ORIENTATION, 1)
-                }
-            } catch (e: Exception) {}
-            val deg = when (rot) { 6 -> 90f; 3 -> 180f; 8 -> 270f; else -> 0f }
-            if (deg != 0f) bmp = Bitmap.createBitmap(bmp, 0, 0, bmp.width, bmp.height, Matrix().apply { postRotate(deg) }, true)
-            return bmp
-        } catch (e: Throwable) {
-            return null
-        }
     }
 
     // ---------- controle ----------

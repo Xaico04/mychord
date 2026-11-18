@@ -18,7 +18,7 @@ class Synth {
 
     // ---- sintetizador ----
     @Volatile var wave = 0
-    @Volatile var vol = 0.4f
+    @Volatile var vol = 1f   // fixo em 100%: o volume e controlado so pelo celular
     val freq = FloatArray(NV)
     val tf = FloatArray(NV)
     val glide = FloatArray(NV)

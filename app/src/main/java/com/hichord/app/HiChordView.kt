@@ -1,14 +1,12 @@
 package com.hichord.app
 import android.content.Context
 import android.graphics.*
+import android.os.Build
 import android.view.*
 import android.widget.Toast
 import kotlin.math.*
 
 class HiChordView(ctx: Context, private val synth: Synth) : View(ctx) {
-    var onTheme: () -> Unit = {}
-    var onResetTheme: () -> Unit = {}
-    var onRotate: () -> Unit = {}
     var onUpdate: () -> Unit = {}
     private val updR = RectF(); private var updLabel = "Atualizar"; private var updHot = false
     fun setUpdate(label: String, hot: Boolean) { updLabel = label; updHot = hot; invalidate() }
@@ -21,7 +19,7 @@ class HiChordView(ctx: Context, private val synth: Synth) : View(ctx) {
     // botão do controle de cada acorde: LB=C, RB=D, LT=E, RT=F, X=G, A=A, B=B
     private val PADL = arrayOf("LB", "RB", "LT", "RT", "X", "A", "B")
     private val MODS = arrayOf("", "7ª", "sus4", "add9", "inversão")
-    private val BTN = arrayOf("Tom −", "Tom +", "Escala", "Onda", "Vol −", "Vol +", "Tema", "Padrão")
+    private val BTN = arrayOf("Tom −", "Tom +", "Escala", "Onda")
     private val NB = 8
     private var key = 0; private var minor = false; private var cur = -1; private var mod = 0
     private var padSeen = false
@@ -31,7 +29,7 @@ class HiChordView(ctx: Context, private val synth: Synth) : View(ctx) {
     private var l2Key = false; private var l2Axis = false; private var r2Key = false; private var r2Axis = false
     private var hx = 0; private var hy = 0
     private val padR = Array(7) { RectF() }; private val btnR = Array(NB) { RectF() }
-    private val padArea = RectF(); private val rotR = RectF()
+    private val padArea = RectF(); private val helpR = RectF()
     private val visor = RectF(); private var jcx = 0f; private var jcy = 0f; private var jr = 1f
     private val ptrPad = HashMap<Int, Int>(); private var joyPtr = -1
     private val p = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -73,6 +71,7 @@ class HiChordView(ctx: Context, private val synth: Synth) : View(ctx) {
     private var earQ = -1; private var earState = 0; private var earMsg = "Toque para ouvir"
     private var earOk = 0; private var earTot = 0; private var earStreak = 0; private var earLvl = 1; private var earGen = 0
     private val stepR = Array(16) { RectF() }
+    private val laneR = Array(8) { RectF() }
     private val tmpR = RectF()
     private val midi = MidiIO(ctx, synth)
     private val fxR = RectF(); private val modeR = RectF()
@@ -163,13 +162,22 @@ class HiChordView(ctx: Context, private val synth: Synth) : View(ctx) {
         synth.seqN = ns.size
     }
     private fun btnLabel(i: Int): String = when (page) {
-        0 -> when (i) { 2 -> if (minor) "Menor" else "Maior"; 3 -> WAVES[synth.wave]; else -> BTN[i] }
+        0 -> when (i) {
+            2 -> if (minor) "Menor" else "Maior"
+            3 -> WAVES[synth.wave]
+            4 -> if (synth.playing) "■ Parar" else "▶ Tocar"
+            5 -> BPMS[bpmI].toString() + " BPM"
+            6 -> fxText(0)
+            7 -> fxText(1)
+            else -> BTN[i]
+        }
         1 -> fxText(i)
         2 -> loopText(i)
         3 -> drumText(i)
         else -> midiText(i)
     }
     private fun btnHot(i: Int): Boolean = when (page) {
+        0 -> (i == 4 && synth.playing) || (i == 6 && fxOn(0)) || (i == 7 && fxOn(1))
         1 -> fxOn(i)
         2 -> if (i < 6) (synth.tState.get(i) == 2 || synth.tState.get(i) == 3) else (i == 6 && synth.playing)
         3 -> i == 2 && synth.playing
@@ -303,10 +311,17 @@ class HiChordView(ctx: Context, private val synth: Synth) : View(ctx) {
         earAt(gen, 1500L) { earQuestion() }
         invalidate()
     }
+    private val LSH = arrayOf("Kick", "Caixa", "Hat", "Hat ab.", "Palma", "Tom", "Perc", "Melod.")
+    private fun laneHas(l: Int): Boolean { for (s in 0 until 16) if (synth.pat[l * 16 + s].toInt() != 0) return true; return false }
     private fun drawSteps() {
         rr(visor, dp(18f), visorC)
-        val head = LANES[lane].uppercase() + " · KIT " + KITS[synth.kit].uppercase() + " · " + BPMS[bpmI] + " BPM" + (if (synth.playing) " ▶" else "")
-        txt(head, visor.left + dp(14f), visor.top + dp(20f), 11f, infoC, Paint.Align.LEFT, true, false, visor.width() - dp(28f))
+        // seletor de pista: toque direto no nome do instrumento (pista com som fica com tom mais claro)
+        for (i in 0 until 8) {
+            val on = i == lane
+            val bgc = if (on) accent else if (laneHas(i)) mix(panelC, accent, 0.35f) else panelC
+            rr(laneR[i], dp(10f), bgc)
+            txt(LSH[i], laneR[i].centerX(), laneR[i].centerY() + dp(4f), 10f, if (on) onAccent else Color.WHITE, Paint.Align.CENTER, false, on, laneR[i].width() - dp(4f))
+        }
         val cur16 = if (synth.playing) synth.uiStep % 16 else -1
         for (i in 0 until 16) {
             val r = stepR[i]; val v = synth.pat[lane * 16 + i].toInt()
@@ -343,7 +358,7 @@ class HiChordView(ctx: Context, private val synth: Synth) : View(ctx) {
         else -> "◂ Voltar"
     }
     private fun fxOn(i: Int) = i in 0..3 && fxLvl[i] > 0
-    private fun tapBtn(i: Int) { when (page) { 0 -> act(i); 1 -> actFx(i); 2 -> actLoop(i); 3 -> actDrum(i); else -> actMidi(i) } }
+    private fun tapBtn(i: Int) { when (page) { 0 -> actMenu(i); 1 -> actFx(i); 2 -> actLoop(i); 3 -> actDrum(i); else -> actMidi(i) } }
     private fun actFx(i: Int) {
         when (i) {
             0, 1, 2, 3 -> fxLvl[i] = (fxLvl[i] + 1) % 4
@@ -355,78 +370,21 @@ class HiChordView(ctx: Context, private val synth: Synth) : View(ctx) {
         pushFx(); saveFx(); invalidate()
     }
 
-    // ---------- tema ----------
-    private var bg: Bitmap? = null
-    private val bgSrc = Rect(); private val bgDst = Rect()
-    private val bgPaint = Paint(Paint.FILTER_BITMAP_FLAG)
-    private var accent = teal; private var accent2 = pink
-    private var panelC = Color.parseColor("#1b2232"); private var visorC = Color.parseColor("#05080d")
-    private var gridC = Color.parseColor("#12323a")
-    private var nameC = Color.parseColor("#c9fff6"); private var infoC = Color.parseColor("#9fe9dc")
-    private var onAccent = Color.parseColor("#06201c")
+    // ---------- cores ----------
+    private val accent = teal
+    private val accent2 = pink
+    private val panelC = Color.parseColor("#1b2232")
+    private val visorC = Color.parseColor("#05080d")
+    private val gridC = Color.parseColor("#12323a")
+    private val nameC = Color.parseColor("#c9fff6")
+    private val infoC = Color.parseColor("#9fe9dc")
+    private val onAccent = Color.parseColor("#06201c")
     private val grayC = Color.parseColor("#9aa4b5")
 
     private fun mix(a: Int, b: Int, t: Float) = Color.rgb(
         (Color.red(a) * (1 - t) + Color.red(b) * t).toInt(),
         (Color.green(a) * (1 - t) + Color.green(b) * t).toInt(),
         (Color.blue(a) * (1 - t) + Color.blue(b) * t).toInt())
-
-    /** Troca a imagem de fundo e adapta cores de todo o app a ela. null = tema padrão. */
-    fun applyTheme(b: Bitmap?) {
-        bg = b
-        if (b == null) {
-            accent = teal; accent2 = pink
-            panelC = Color.parseColor("#1b2232"); visorC = Color.parseColor("#05080d")
-            gridC = Color.parseColor("#12323a")
-            nameC = Color.parseColor("#c9fff6"); infoC = Color.parseColor("#9fe9dc")
-            onAccent = Color.parseColor("#06201c")
-        } else {
-            extractAccents(b)
-        }
-        updateBgRects(); invalidate()
-    }
-    private fun extractAccents(b: Bitmap) {
-        val s = Bitmap.createScaledBitmap(b, 48, 48, true)
-        val wt = FloatArray(12); val hs = FloatArray(12); val ss = FloatArray(12); val vs = FloatArray(12)
-        val hsv = FloatArray(3)
-        for (y in 0 until 48) for (x in 0 until 48) {
-            Color.colorToHSV(s.getPixel(x, y), hsv)
-            if (hsv[1] < 0.3f || hsv[2] < 0.4f) continue
-            val w = hsv[1] * hsv[2]; val k = (hsv[0] / 30f).toInt().coerceIn(0, 11)
-            wt[k] += w; hs[k] += hsv[0] * w; ss[k] += hsv[1] * w; vs[k] += hsv[2] * w
-        }
-        var k1 = 0
-        for (k in 1 until 12) if (wt[k] > wt[k1]) k1 = k
-        var h1 = 220f
-        if (wt[k1] < 1f) {
-            accent = Color.parseColor("#e5e7eb"); accent2 = Color.parseColor("#94a3b8")
-        } else {
-            h1 = hs[k1] / wt[k1]
-            accent = Color.HSVToColor(floatArrayOf(h1, (ss[k1] / wt[k1]).coerceIn(0.55f, 0.95f), (vs[k1] / wt[k1]).coerceIn(0.85f, 1f)))
-            var k2 = -1
-            for (k in 0 until 12) {
-                val d = min((k - k1 + 12) % 12, (k1 - k + 12) % 12)
-                if (d >= 2 && wt[k] >= wt[k1] * 0.25f && (k2 < 0 || wt[k] > wt[k2])) k2 = k
-            }
-            accent2 = if (k2 >= 0) Color.HSVToColor(floatArrayOf(hs[k2] / wt[k2], (ss[k2] / wt[k2]).coerceIn(0.55f, 0.95f), (vs[k2] / wt[k2]).coerceIn(0.85f, 1f)))
-            else Color.HSVToColor(floatArrayOf((h1 + 40f) % 360f, 0.6f, 1f))
-        }
-        panelC = Color.HSVToColor(200, floatArrayOf(h1, 0.45f, 0.14f))
-        visorC = Color.argb(205, 4, 7, 12)
-        gridC = Color.argb(50, Color.red(accent), Color.green(accent), Color.blue(accent))
-        nameC = mix(accent, Color.WHITE, 0.75f); infoC = mix(accent, Color.WHITE, 0.5f)
-        val lum = 0.299f * Color.red(accent) + 0.587f * Color.green(accent) + 0.114f * Color.blue(accent)
-        onAccent = if (lum > 150f) Color.parseColor("#0b0e14") else Color.WHITE
-    }
-    private fun updateBgRects() {
-        val b = bg ?: return
-        if (width <= 0 || height <= 0) return
-        val bw = b.width; val bh = b.height
-        val vr = width.toFloat() / height; val br = bw.toFloat() / bh
-        if (br > vr) { val nw = (bh * vr).toInt(); val x0 = (bw - nw) / 2; bgSrc.set(x0, 0, x0 + nw, bh) }
-        else { val nh = (bw / vr).toInt(); val y0 = (bh - nh) / 2; bgSrc.set(0, y0, bw, y0 + nh) }
-        bgDst.set(0, 0, width, height)
-    }
 
     // ---------- teoria ----------
     private fun sn(sc: IntArray, s: Int) = sc[s % 7] + 12 * (s / 7)
@@ -515,21 +473,73 @@ class HiChordView(ctx: Context, private val synth: Synth) : View(ctx) {
         if (n != cur || m != mod) { cur = n; mod = m; applyChord(true) }
         invalidate()
     }
-    private fun act(i: Int) {
+    private fun actMenu(i: Int) {
         when (i) {
             0 -> { if (key > -12) key-- }
             1 -> { if (key < 12) key++ }
             2 -> { minor = !minor }
             3 -> { synth.wave = (synth.wave + 1) and 3 }
-            4 -> { synth.vol = max(0f, synth.vol - 0.05f) }
-            5 -> { synth.vol = min(1f, synth.vol + 0.05f) }
-            6 -> { onTheme() }
-            7 -> { onResetTheme() }
-            8 -> { nextMode() }
-            9 -> { synth.transport(!synth.playing) }
-            10 -> { page = (page + 1) % PAGES.size }
+            4 -> { synth.transport(!synth.playing) }
+            5 -> { cycleBpm(); saveFx() }
+            6 -> { fxLvl[0] = (fxLvl[0] + 1) % 4; pushFx(); saveFx() }
+            7 -> { fxLvl[1] = (fxLvl[1] + 1) % 4; pushFx(); saveFx() }
         }
         applyChord(false); invalidate()
+    }
+
+    // ---------- navegação pelo controle (modo EDITAR) ----------
+    private var navOn = false
+    private var navId = 0   // 0-7 botões · 8-23 passos · 24 Atualizar · 25 Página · 26 ? · 27-34 pistas
+    private fun navValid(id: Int) = id in 0..7 || id in 24..26 || ((id in 8..23 || id in 27..34) && page == 3)
+    private fun navRect(id: Int): RectF = when {
+        id < 8 -> btnR[id]
+        id < 24 -> stepR[id - 8]
+        id == 24 -> updR
+        id == 25 -> fxR
+        id == 26 -> helpR
+        else -> laneR[id - 27]
+    }
+    private fun navMove(d: Int) {   // d: 0 esquerda, 1 direita, 2 cima, 3 baixo
+        if (!navValid(navId)) navId = 0
+        val a = navRect(navId); val cx = a.centerX(); val cy = a.centerY()
+        var best = -1; var bs = Float.MAX_VALUE
+        for (id in 0..34) {
+            if (id == navId || !navValid(id)) continue
+            val r = navRect(id); val dx = r.centerX() - cx; val dy = r.centerY() - cy
+            val along = when (d) { 0 -> -dx; 1 -> dx; 2 -> -dy; else -> dy }
+            val perp = if (d < 2) abs(dy) else abs(dx)
+            if (along < dp(4f)) continue
+            val s = along + perp * 2.5f
+            if (s < bs) { bs = s; best = id }
+        }
+        if (best >= 0) navId = best
+        invalidate()
+    }
+    private fun navActivate() {
+        val id = navId
+        when {
+            id < 8 -> tapBtn(id)
+            id < 24 -> toggleStep(id - 8)
+            id == 24 -> onUpdate()
+            id == 25 -> goPage(1)
+            id == 26 -> openHelp()
+            else -> { lane = id - 27; saveFx(); invalidate() }
+        }
+        if (!navValid(navId)) navId = 0
+    }
+    private fun toggleNav() { navOn = !navOn; if (navOn && !navValid(navId)) navId = 0; invalidate() }
+    private fun goPage(d: Int) {
+        page = (page + d + PAGES.size) % PAGES.size
+        if (navOn && !navValid(navId)) navId = 0
+        invalidate()
+    }
+    private fun dpad(d: Int) {
+        if (helpOpen) {
+            when (d) { 0 -> helpSection(-1); 1 -> helpSection(1); 2 -> helpScrollBy(-dp(70f)); else -> helpScrollBy(dp(70f)) }
+            return
+        }
+        if (navOn) { navMove(d); return }
+        when (d) { 0 -> actMenu(0); 1 -> actMenu(1); 2 -> actMenu(2); else -> actMenu(3) }
     }
 
     // ---------- controle ----------
@@ -544,8 +554,38 @@ class HiChordView(ctx: Context, private val synth: Synth) : View(ctx) {
             KeyEvent.KEYCODE_BUTTON_B -> 6
             else -> -1
         }
+        if (helpOpen) {   // com a ajuda aberta o controle só navega nela
+            if (ci >= 0) {
+                if (down) {
+                    when (ci) { 0 -> dpad(0); 1 -> dpad(1); 6 -> closeHelp() }
+                } else {   // soltar um botão não deixa acorde preso
+                    when (ci) {
+                        2 -> { l2Key = false; padChord[2] = l2Axis }
+                        3 -> { r2Key = false; padChord[3] = r2Axis }
+                        else -> padChord[ci] = false
+                    }
+                    refresh()
+                }
+                return true
+            }
+            if (down) {
+                when (code) {
+                    KeyEvent.KEYCODE_DPAD_LEFT -> dpad(0)
+                    KeyEvent.KEYCODE_DPAD_RIGHT -> dpad(1)
+                    KeyEvent.KEYCODE_DPAD_UP -> dpad(2)
+                    KeyEvent.KEYCODE_DPAD_DOWN -> dpad(3)
+                    KeyEvent.KEYCODE_BUTTON_SELECT, KeyEvent.KEYCODE_BUTTON_START -> closeHelp()
+                }
+            }
+            return true
+        }
         if (ci >= 0) {
             padSeen = true
+            if (navOn && (ci == 5 || ci == 6)) {   // no EDITAR: A confirma, B sai
+                if (down) { if (ci == 5) navActivate() else navOn = false; invalidate() }
+                else { padChord[ci] = false; refresh() }
+                return true
+            }
             when (ci) {
                 2 -> { l2Key = down; padChord[2] = l2Key || l2Axis }
                 3 -> { r2Key = down; padChord[3] = r2Key || r2Axis }
@@ -554,72 +594,360 @@ class HiChordView(ctx: Context, private val synth: Synth) : View(ctx) {
             refresh(); return true
         }
         if (down && rep == 0) {
-            val a = when (code) {
-                KeyEvent.KEYCODE_DPAD_LEFT -> 0
-                KeyEvent.KEYCODE_DPAD_RIGHT -> 1
-                KeyEvent.KEYCODE_DPAD_UP -> 5
-                KeyEvent.KEYCODE_DPAD_DOWN -> 4
-                KeyEvent.KEYCODE_BUTTON_SELECT -> 3
-                KeyEvent.KEYCODE_BUTTON_THUMBL -> 2
-                KeyEvent.KEYCODE_BUTTON_Y -> 8
-                KeyEvent.KEYCODE_BUTTON_START -> 9
-                KeyEvent.KEYCODE_BUTTON_THUMBR -> 10
-                else -> -1
+            when (code) {
+                KeyEvent.KEYCODE_DPAD_LEFT -> dpad(0)
+                KeyEvent.KEYCODE_DPAD_RIGHT -> dpad(1)
+                KeyEvent.KEYCODE_DPAD_UP -> dpad(2)
+                KeyEvent.KEYCODE_DPAD_DOWN -> dpad(3)
+                KeyEvent.KEYCODE_BUTTON_SELECT -> toggleNav()
+                KeyEvent.KEYCODE_BUTTON_THUMBL -> goPage(-1)
+                KeyEvent.KEYCODE_BUTTON_THUMBR -> goPage(1)
+                KeyEvent.KEYCODE_BUTTON_Y -> nextMode()
+                KeyEvent.KEYCODE_BUTTON_START -> synth.transport(!synth.playing)
+                else -> return false
             }
-            if (a >= 0) { padSeen = true; act(a); return true }
+            padSeen = true; invalidate(); return true
         }
         return false
     }
     fun onPadMotion(e: MotionEvent) {
         padSeen = true
         fun dz(v: Float) = if (abs(v) < 0.2f) 0f else v
-        gx = dz(e.getAxisValue(MotionEvent.AXIS_X)); gy = -dz(e.getAxisValue(MotionEvent.AXIS_Y))
+        val ax = dz(e.getAxisValue(MotionEvent.AXIS_X)); val ay = -dz(e.getAxisValue(MotionEvent.AXIS_Y))
+        val nx = e.getAxisValue(MotionEvent.AXIS_HAT_X).roundToInt(); val ny = e.getAxisValue(MotionEvent.AXIS_HAT_Y).roundToInt()
+        if (helpOpen) {
+            gx = 0f; gy = 0f
+            if (ay != 0f) helpScrollBy(-ay * dp(6f))
+            if (nx != hx) { if (nx < 0) dpad(0) else if (nx > 0) dpad(1); hx = nx }
+            if (ny != hy) { if (ny < 0) dpad(2) else if (ny > 0) dpad(3); hy = ny }
+            return
+        }
+        gx = ax; gy = ay
         l2Axis = max(e.getAxisValue(MotionEvent.AXIS_LTRIGGER), e.getAxisValue(MotionEvent.AXIS_BRAKE)) > 0.5f
         r2Axis = max(e.getAxisValue(MotionEvent.AXIS_RTRIGGER), e.getAxisValue(MotionEvent.AXIS_GAS)) > 0.5f
         padChord[2] = l2Key || l2Axis
         padChord[3] = r2Key || r2Axis
-        val nx = e.getAxisValue(MotionEvent.AXIS_HAT_X).roundToInt(); val ny = e.getAxisValue(MotionEvent.AXIS_HAT_Y).roundToInt()
-        if (nx != hx) { if (nx < 0) act(0) else if (nx > 0) act(1); hx = nx }
-        if (ny != hy) { if (ny < 0) act(5) else if (ny > 0) act(4); hy = ny }
+        if (nx != hx) { if (nx < 0) dpad(0) else if (nx > 0) dpad(1); hx = nx }
+        if (ny != hy) { if (ny < 0) dpad(2) else if (ny > 0) dpad(3); hy = ny }
         refresh()
     }
 
-    // ---------- layout (deitado e em pé) ----------
-    override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) {
+    // ---------- ajuda (botão ?) ----------
+    private var helpOpen = false
+    private var helpSec = 0
+    private var helpScroll = 0f
+    private var helpMax = 0f
+    private var helpH = 0f
+    private var helpKey = ""
+    private var hDownY = 0f
+    private var hLastY = 0f
+    private var hMoved = false
+    private val helpPanel = RectF(); private val helpClose = RectF(); private val helpView = RectF()
+    private class HL(val s: String, val x: Float, val kind: Int, val y: Float)
+    private var helpLines: List<HL> = emptyList()
+
+    private val HT = arrayOf("Início", "Acordes", "Modos", "Efeitos", "Bateria", "Loop", "MIDI", "Controle")
+    private val HELP = arrayOf(
+        arrayOf(
+            "# O que é o HiChord",
+            "Um sintetizador de acordes de bolso: você toca acordes prontos da tonalidade escolhida, sem precisar saber teoria. Dá para tocar na tela ou com um controle Bluetooth.",
+            "# A tela",
+            "• Visor (canto superior esquerdo): mostra o acorde que está soando, suas notas, a forma de onda e um resumo com modo, tom e timbre.",
+            "• Pads (grade da direita): os 7 acordes da tonalidade, graus I a VII. Toque e segure para soar. Arraste o dedo de um pad para outro, sem soltar, para trocar de acorde.",
+            "• Analógico (círculo): arraste para variar o acorde. Veja a seção Acordes.",
+            "• Botões ao lado do analógico: mudam conforme a página escolhida na barra de cima.",
+            "• MODO (última célula da grade de pads): muda a forma como o acorde soa. Veja a seção Modos.",
+            "# Barra de cima",
+            "• Atualizar: procura uma versão nova do app e instala. Fica colorido, com um ●, quando existe versão nova.",
+            "• Página (Menu, FX, Loop, Bateria, MIDI): cada toque vai para a página seguinte de botões.",
+            "• ?: abre esta ajuda.",
+            "• 🎮 ou 🎧: mostra se um controle foi detectado.",
+            "# Volume e giro de tela",
+            "• O app sempre toca em 100%. Use os botões de volume do próprio celular.",
+            "• A tela fica deitada. Ela só gira para vertical se a rotação automática do celular estiver ligada."
+        ),
+        arrayOf(
+            "# Escolher o tom e o timbre",
+            "• Tom − e Tom +: sobem ou descem a tonalidade em meio tom por toque (de −12 a +12). Serve para ajustar ao alcance da sua voz ou de uma música.",
+            "• Escala: alterna entre Maior (som alegre) e Menor (som triste). Os pads mudam para os acordes da nova escala.",
+            "• Onda: troca o timbre: Seno (suave), Triângulo, Serra (brilhante) e Quadrada (oca, estilo videogame).",
+            "# Variar o acorde com o analógico",
+            "• Para cima: 7ª (som mais jazzístico).",
+            "• Para baixo: sus4 (suspenso, parece pedir uma resolução).",
+            "• Para a direita: add9 (aberto e moderno).",
+            "• Para a esquerda: inversão (a nota de baixo muda, deixando a troca entre acordes mais suave).",
+            "• Solte o analógico para voltar ao acorde normal. Os nomes das variações aparecem em volta do círculo.",
+            "# Dica",
+            "Os 7 pads sempre combinam entre si. Comece alternando os pads I, V, VI e IV: é a progressão de muita música pop."
+        ),
+        arrayOf(
+            "# Modos de toque (botão MODO)",
+            "Cada toque no MODO passa para o próximo. O nome do modo aparece no visor.",
+            "• Play: o acorde soa enquanto você segura o pad. O básico, para acompanhar.",
+            "• Strum: as notas entram em sequência, como uma palhetada de violão. Cada toque alterna palhetada para baixo e para cima.",
+            "• Arpejo: toca as notas do acorde uma a uma enquanto você segura. Direção e velocidade ficam na página FX.",
+            "• Drone: toca o acorde e deixa o grave (nota principal e quinta) soando mesmo depois de soltar, deslizando para o próximo acorde. Troque de modo para parar.",
+            "• Lead: cada pad vira uma nota da escala, para tocar melodias de uma nota só. Analógico: cima = oitava acima, baixo = oitava abaixo, direita = vibrato, esquerda = duas oitavas acima.",
+            "• Sequencer: ao tocar um acorde, a pista Melodia da Bateria passa a tocar as notas dele no andamento. Liga o ritmo sozinho.",
+            "• Ouvido: treino musical. O app toca uma nota e você responde tocando o pad do grau certo (I a VII). Toque no visor para ouvir de novo. A dificuldade fica na página MIDI."
+        ),
+        arrayOf(
+            "# Página FX",
+            "• Reverb, Delay, Chorus e Flanger: cada toque muda a intensidade (desligado, 30%, 60%, 100% e volta). Reverb = som de sala. Delay = eco. Chorus = som mais largo. Flanger = efeito de jato.",
+            "• Arp: direção do arpejo (sobe, desce, vai e volta, aleatório).",
+            "• Tempo: andamento em BPM, de 70 a 180.",
+            "• Eco: tempo entre os ecos do Delay (150, 250, 350 ou 450 ms).",
+            "• Voltar: volta para a página Menu.",
+            "# Atalhos",
+            "• Reverb e Delay também estão na página Menu, para mexer sem trocar de página.",
+            "• Os efeitos ficam salvos ao fechar o app.",
+            "• Os efeitos entram na gravação do Loop, mas a bateria não usa efeitos."
+        ),
+        arrayOf(
+            "# Criar um ritmo, passo a passo",
+            "1. Toque no botão de página até aparecer Bateria.",
+            "2. Escolha o Kit: só muda o timbre dos sons (808, Rock, Lo-Fi, Techno, Jazz, Eletro e Acústico).",
+            "3. Escolha um Ritmo pronto (Rock, Hip-hop, Disco, Techno, Reggae, Funk) para começar, ou Vazio para começar do zero. Atenção: trocar o Ritmo substitui todo o padrão atual.",
+            "4. Toque em Tocar. Uma moldura branca corre pelos 16 passos.",
+            "5. No topo do visor, toque no nome do instrumento (Kick, Caixa, Hat...) para escolher a pista. Depois toque nos quadradinhos para ligar ou desligar cada passo. Dá para editar com o ritmo tocando.",
+            "6. Ajuste o BPM e o volume da Bateria (mudo, 30%, 55%, 80% e 100%).",
+            "# Como ler a grade",
+            "• São 16 passos, cada um é uma semicolcheia. Os passos 1, 5, 9 e 13 são os tempos do compasso e aparecem mais claros.",
+            "• Pistas que já têm som aparecem com tom mais claro no topo do visor.",
+            "# Receita básica",
+            "• Kick nos passos 1, 5, 9 e 13.",
+            "• Caixa nos passos 5 e 13.",
+            "• Hat nos passos ímpares (1, 3, 5, 7...).",
+            "# Outros botões",
+            "• Limpar pista: apaga só a pista escolhida.",
+            "• Pista Melodia: cada passo aceita de 0 a 8. De 1 a 4 são as notas do acorde e de 5 a 8 são as mesmas uma oitava acima. Toque várias vezes no passo para trocar o número. Só soa no modo Sequencer.",
+            "• A bateria sai seca (no centro, sem efeitos) e o padrão fica salvo ao fechar o app."
+        ),
+        arrayOf(
+            "# Como o Loop funciona",
+            "O Loop grava o que você toca (já com os efeitos) e repete em ciclo por cima da bateria. São 6 faixas, T1 a T6. A bateria não entra na gravação: ela toca pelo sequenciador.",
+            "# Sua primeira música",
+            "1. Página Bateria: monte o ritmo, escolha o BPM e o tamanho do loop (1, 2 ou 4 compassos). Faça isso antes de gravar: depois o andamento e o tamanho travam.",
+            "2. Página Loop: escolha um modo (Play ou Strum para acordes) e deixe o primeiro acorde pronto.",
+            "3. Toque em T1. Ele fica aguardando e começa a gravar no início do próximo compasso, por um loop inteiro. Toque seus acordes. Se o ritmo estava parado, ele liga sozinho.",
+            "4. Quando o loop fecha, T1 passa a tocar sozinha.",
+            "5. Troque de modo (Lead para melodia, Drone para grave) e grave T2 do mesmo jeito. Repita até T6.",
+            "# Controlar as faixas",
+            "• Faixa vazia: um toque prepara e grava.",
+            "• Faixa tocando: um toque deixa muda. Toque de novo para voltar.",
+            "• Faixa aguardando ou gravando: um toque cancela.",
+            "• Limpar tudo: apaga todas as faixas e libera o BPM e o tamanho do loop.",
+            "# Importante",
+            "• As gravações não ficam salvas ao fechar o app.",
+            "• Se aparecer aviso de memória, use menos faixas ou um loop menor."
+        ),
+        arrayOf(
+            "# Página MIDI",
+            "Serve para ligar o HiChord a teclados, computadores e outros equipamentos pela porta USB (cabo OTG).",
+            "• MIDI: cada toque passa pelo próximo dispositivo encontrado. Depois do último, desliga.",
+            "• Canal: canal MIDI usado nas notas enviadas (1 a 16). A bateria sai no canal 10.",
+            "• Saída: envia para fora as notas que você toca e a bateria.",
+            "• Entrada: um teclado externo passa a tocar o som do app.",
+            "• Clock: envia o relógio MIDI e Start/Stop, para sincronizar com outros aparelhos.",
+            "• Ouvido: dificuldade do treino de ouvido.",
+            "• Notas OFF: corta qualquer nota que tenha ficado presa.",
+            "• Zerar placar: zera acertos e sequência do treino de ouvido.",
+            "# Dica",
+            "Fone USB com DAC: conecte antes de abrir o app."
+        ),
+        arrayOf(
+            "# Tocar",
+            "• LB, RB, LT, RT, X, A e B tocam os acordes I a VII. As letras aparecem nos pads quando o controle é detectado.",
+            "• Analógico esquerdo: variações do acorde (cima 7ª, baixo sus4, direita add9, esquerda inversão).",
+            "• Y: troca o MODO. Start: liga e desliga o ritmo.",
+            "• Direcional: ◀ e ▶ mudam o tom (− e +). ▲ alterna Maior e Menor. ▼ troca a onda.",
+            "# Configurar sem tocar na tela (modo EDITAR)",
+            "• R3 (apertar o analógico direito): próxima página (Menu, FX, Loop, Bateria, MIDI). L3 (apertar o analógico esquerdo): página anterior.",
+            "• Select: liga ou desliga o modo EDITAR. Uma moldura branca aparece sobre um botão.",
+            "• No EDITAR, o direcional move a moldura por todos os botões da página, pelos passos e pistas da Bateria e pela barra de cima (Atualizar, Página e ?).",
+            "• A confirma, o mesmo que tocar no botão. B ou Select sai do EDITAR. Enquanto estiver no EDITAR, A e B não tocam acorde.",
+            "• Tocar na tela também sai do EDITAR.",
+            "# Exemplo: criar um ritmo só com o controle",
+            "1. R3 até a página Bateria.",
+            "2. Select para entrar no EDITAR. Com o direcional, vá até Ritmo e aperte A até escolher um.",
+            "3. Vá até Tocar e aperte A.",
+            "4. Suba até o nome de uma pista e aperte A. Desça aos passos e aperte A em cada um para ligar ou desligar.",
+            "5. Select para sair e toque seus acordes por cima.",
+            "# Nesta ajuda",
+            "• ◀ ▶ ou LB RB trocam de seção. ▲ ▼ ou o analógico rolam o texto. B ou Select fecham."
+        )
+    )
+
+    private fun openHelp() {
+        ptrPad.clear(); syncTouch(); joyPtr = -1; jx = 0f; jy = 0f
+        navOn = false; helpOpen = true; helpScroll = 0f; refresh()
+    }
+    fun closeHelp(): Boolean {
+        if (!helpOpen) return false
+        helpOpen = false; invalidate(); return true
+    }
+    private fun helpSection(d: Int) { helpSec = (helpSec + d + HT.size) % HT.size; helpScroll = 0f; invalidate() }
+    private fun helpScrollBy(dy: Float) { helpScroll = (helpScroll + dy).coerceIn(0f, helpMax); invalidate() }
+
+    private fun chipRect(i: Int, out: RectF) {
+        val cols = if (width > height) HT.size else 4
+        val gp = dp(6f); val pad = dp(12f)
+        val cw = (helpPanel.width() - 2 * pad - (cols - 1) * gp) / cols
+        val ch = dp(30f)
+        val r = i / cols; val cc = i % cols
+        val x = helpPanel.left + pad + cc * (cw + gp); val y = helpPanel.top + dp(48f) + r * (ch + gp)
+        out.set(x, y, x + cw, y + ch)
+    }
+    private fun helpLayoutView() {
+        val cols = if (width > height) HT.size else 4
+        val rows = (HT.size + cols - 1) / cols
+        val top = helpPanel.top + dp(48f) + rows * (dp(30f) + dp(6f)) + dp(4f)
+        helpView.set(helpPanel.left + dp(16f), top, helpPanel.right - dp(16f), helpPanel.bottom - dp(10f))
+    }
+    private fun buildHelp() {
+        val key = helpSec.toString() + "|" + helpView.width().toInt()
+        if (key == helpKey) return
+        helpKey = key
+        val out = ArrayList<HL>()
+        val w = helpView.width()
+        var cur = 0f
+        p.typeface = Typeface.DEFAULT; p.shader = null
+        for (raw in HELP[helpSec]) {
+            val head = raw.startsWith("# ")
+            val item = raw.startsWith("• ") || (raw.length > 2 && raw[0].isDigit() && raw[1] == '.')
+            val text = if (head) raw.substring(2) else raw
+            p.textSize = dp(if (head) 15f else 13f); p.isFakeBoldText = head
+            val lh = dp(if (head) 22f else 19f)
+            val ind = if (item) dp(16f) else 0f
+            val kind = if (head) 1 else 0
+            if (head && cur > 0f) cur += dp(8f)
+            val line = StringBuilder(); var first = true
+            for (wd in text.split(" ")) {
+                val t = if (line.isEmpty()) wd else line.toString() + " " + wd
+                val lim = if (first) w else w - ind
+                if (line.isEmpty() || p.measureText(t) <= lim) {
+                    line.setLength(0); line.append(t)
+                } else {
+                    cur += lh; out.add(HL(line.toString(), if (first) 0f else ind, kind, cur - dp(5f)))
+                    first = false; line.setLength(0); line.append(wd)
+                }
+            }
+            if (line.isNotEmpty()) { cur += lh; out.add(HL(line.toString(), if (first) 0f else ind, kind, cur - dp(5f))) }
+            cur += dp(if (head) 2f else 5f)
+        }
+        p.isFakeBoldText = false
+        helpLines = out; helpH = cur + dp(10f)
+    }
+    private fun drawHelp(c: Canvas) {
+        helpLayoutView(); buildHelp()
+        helpMax = max(0f, helpH - helpView.height()); helpScroll = helpScroll.coerceIn(0f, helpMax)
+        c.drawColor(Color.argb(190, 0, 0, 0))
+        rr(helpPanel, dp(18f), Color.rgb(14, 19, 29))
+        txt("Ajuda · " + HT[helpSec], helpPanel.left + dp(16f), helpPanel.top + dp(32f), 17f, Color.WHITE, Paint.Align.LEFT, false, true, helpClose.left - helpPanel.left - dp(24f))
+        rr(helpClose, dp(14f), panelC)
+        txt("×", helpClose.centerX(), helpClose.centerY() + dp(7f), 22f, Color.WHITE, Paint.Align.CENTER, false, true)
+        for (i in HT.indices) {
+            chipRect(i, tmpR)
+            rr(tmpR, dp(12f), if (i == helpSec) accent else panelC)
+            txt(HT[i], tmpR.centerX(), tmpR.centerY() + dp(4f), 12f, if (i == helpSec) onAccent else Color.WHITE, Paint.Align.CENTER, false, i == helpSec, tmpR.width() - dp(6f))
+        }
+        c.save(); c.clipRect(helpView)
+        for (l in helpLines) {
+            val y = helpView.top + l.y - helpScroll
+            if (y < helpView.top - dp(24f) || y > helpView.bottom + dp(24f)) continue
+            if (l.kind == 1) txt(l.s, helpView.left + l.x, y, 15f, accent, Paint.Align.LEFT, false, true)
+            else txt(l.s, helpView.left + l.x, y, 13f, Color.rgb(214, 221, 233), Paint.Align.LEFT)
+        }
+        c.restore()
+        if (helpMax > 0f) {
+            val th = max(dp(24f), helpView.height() * helpView.height() / helpH)
+            val ty = helpView.top + (helpView.height() - th) * (helpScroll / helpMax)
+            tmpR.set(helpPanel.right - dp(8f), ty, helpPanel.right - dp(5f), ty + th)
+            rr(tmpR, dp(2f), Color.argb(120, 255, 255, 255))
+        }
+    }
+    private fun helpTap(x: Float, y: Float) {
+        if (helpClose.contains(x, y) || !helpPanel.contains(x, y)) { closeHelp(); return }
+        for (i in HT.indices) {
+            chipRect(i, tmpR)
+            if (tmpR.contains(x, y)) { helpSec = i; helpScroll = 0f; invalidate(); return }
+        }
+    }
+    private fun helpTouch(e: MotionEvent): Boolean {
+        when (e.actionMasked) {
+            MotionEvent.ACTION_DOWN -> { hDownY = e.y; hLastY = e.y; hMoved = false }
+            MotionEvent.ACTION_MOVE -> {
+                if (abs(e.y - hDownY) > dp(8f)) hMoved = true
+                if (hMoved) helpScrollBy(hLastY - e.y)
+                hLastY = e.y
+            }
+            MotionEvent.ACTION_UP -> { if (!hMoved) helpTap(e.x, e.y) }
+        }
+        return true
+    }
+
+    // ---------- layout (deitado e em pé, com área segura do furo da câmera) ----------
+    private var iL = 0f; private var iT = 0f; private var iR = 0f; private var iB = 0f
+    private var barL = 0f; private var barY = 0f; private var barH = 0f
+
+    override fun onSizeChanged(w: Int, h: Int, ow: Int, oh: Int) { layoutAll(w, h) }
+
+    @Suppress("DEPRECATION")
+    override fun onApplyWindowInsets(wi: WindowInsets): WindowInsets {
+        var l = 0; var t = 0; var r = 0; var b = 0
+        if (Build.VERSION.SDK_INT >= 30) {
+            val ins = wi.getInsets(WindowInsets.Type.displayCutout())
+            l = ins.left; t = ins.top; r = ins.right; b = ins.bottom
+        } else if (Build.VERSION.SDK_INT >= 28) {
+            val dc = wi.displayCutout
+            if (dc != null) { l = dc.safeInsetLeft; t = dc.safeInsetTop; r = dc.safeInsetRight; b = dc.safeInsetBottom }
+        }
+        if (l.toFloat() != iL || t.toFloat() != iT || r.toFloat() != iR || b.toFloat() != iB) {
+            iL = l.toFloat(); iT = t.toFloat(); iR = r.toFloat(); iB = b.toFloat()
+            if (width > 0 && height > 0) { layoutAll(width, height); invalidate() }
+        }
+        return wi
+    }
+
+    private fun layoutAll(w: Int, h: Int) {
         val m = dp(12f); val W = w.toFloat(); val H = h.toFloat()
-        val vt = m + dp(24f)
-        rotR.set(dp(92f), dp(6f), dp(154f), dp(34f))
-        updR.set(dp(160f), dp(6f), dp(254f), dp(34f))
-        fxR.set(dp(260f), dp(6f), dp(322f), dp(34f))
+        val L = max(m, iL + dp(8f)); val R = W - max(m, iR + dp(8f))
+        val T = max(dp(6f), iT + dp(4f)); val B = H - max(m, iB + dp(6f))
+        barL = L; barY = T; barH = dp(32f)
+        updR.set(L + dp(98f), T, L + dp(206f), T + barH)
+        fxR.set(L + dp(214f), T, L + dp(322f), T + barH)
+        helpR.set(R - barH, T, R, T + barH)
+        val vt = T + barH + dp(8f)
         val gap = m * 0.5f
         val bt: Float; val bx0: Float; val bw: Float; val bh: Float
         val pTop: Float; val pLeft: Float; val pw: Float; val ph: Float
         if (W > H) {
-            val leftW = W * 0.40f
-            visor.set(m, vt, leftW, vt + (H - vt - m) * 0.42f)
-            val rh = H - m - visor.bottom - m
-            jr = min(rh / 2.2f, (leftW - m) * 0.22f)
-            jcx = m + jr * 1.1f; jcy = visor.bottom + m + rh / 2f
+            val leftW = L + (R - L) * 0.40f
+            visor.set(L, vt, leftW, vt + (B - vt) * 0.42f)
+            val rh = B - visor.bottom - m
+            jr = min(rh / 2.2f, (leftW - L) * 0.22f)
+            jcx = L + jr * 1.1f; jcy = visor.bottom + m + rh / 2f
             bx0 = jcx + jr * 1.1f + m; bw = (leftW - bx0 - m) / 2f
             bt = visor.bottom + m; bh = (rh - 3 * gap) / 4f
             pLeft = leftW + m; pTop = vt
-            pw = (W - m - pLeft - 3 * m) / 4f; ph = (H - m - pTop - m) / 2f
+            pw = (R - pLeft - 3 * m) / 4f; ph = (B - pTop - m) / 2f
         } else {
-            visor.set(m, vt, W - m, vt + H * 0.27f)
-            jr = min(W * 0.2f, H * 0.12f); jcx = m + jr * 1.1f; jcy = visor.bottom + m + jr * 1.1f
-            bx0 = jcx + jr * 1.1f + m; bw = (W - m - bx0 - m) / 2f
+            visor.set(L, vt, R, vt + H * 0.27f)
+            jr = min((R - L) * 0.2f, H * 0.12f); jcx = L + jr * 1.1f; jcy = visor.bottom + m + jr * 1.1f
+            bx0 = jcx + jr * 1.1f + m; bw = (R - bx0 - m) / 2f
             bt = jcy - jr * 1.1f; bh = (jr * 2.2f - 3 * gap) / 4f
-            pLeft = m; pTop = jcy + jr * 1.1f + m
-            pw = (W - m * 5) / 4f; ph = (H - pTop - m * 2) / 2f
+            pLeft = L; pTop = jcy + jr * 1.1f + m
+            pw = (R - L - 3 * m) / 4f; ph = (B - pTop - m) / 2f
         }
-        run {   // grade de 16 passos dentro do visor (página Bateria)
+        run {   // pistas e grade de 16 passos dentro do visor (página Bateria)
             val gx0 = visor.left + dp(8f); val gx1 = visor.right - dp(8f)
-            val gy0 = visor.top + dp(30f); val gy1 = visor.bottom - dp(8f)
+            val gy0 = visor.top + dp(42f); val gy1 = visor.bottom - dp(8f)
             val cw = (gx1 - gx0) / 8f; val chh = (gy1 - gy0) / 2f
             for (i in 0 until 16) {
                 val c = i % 8; val r = i / 8
                 stepR[i].set(gx0 + c * cw + dp(2f), gy0 + r * chh + dp(2f), gx0 + (c + 1) * cw - dp(2f), gy0 + (r + 1) * chh - dp(2f))
             }
+            for (i in 0 until 8) laneR[i].set(gx0 + i * cw + dp(2f), visor.top + dp(8f), gx0 + (i + 1) * cw - dp(2f), visor.top + dp(34f))
         }
         for (i in 0 until NB) {
             val l = bx0 + (i % 2) * (bw + m); val t = bt + (i / 2) * (bh + gap)
@@ -637,7 +965,10 @@ class HiChordView(ctx: Context, private val synth: Synth) : View(ctx) {
             l0 = min(l0, padR[i].left); t0 = min(t0, padR[i].top); r0 = max(r0, padR[i].right); b0 = max(b0, padR[i].bottom)
         }
         padArea.set(l0 - m * 0.5f, t0 - m * 0.5f, r0 + m * 0.5f, b0 + m * 0.5f)
-        updateBgRects()
+        helpPanel.set(L - dp(4f), T, R + dp(4f), B + dp(4f))
+        helpClose.set(helpPanel.right - dp(44f), helpPanel.top + dp(8f), helpPanel.right - dp(10f), helpPanel.top + dp(40f))
+        helpKey = ""
+        if (Build.VERSION.SDK_INT >= 29) systemGestureExclusionRects = listOf(Rect(0, 0, w, h))
     }
 
     // ---------- toque (arrastar o dedo troca de acorde sem soltar) ----------
@@ -649,10 +980,11 @@ class HiChordView(ctx: Context, private val synth: Synth) : View(ctx) {
     private fun down(id: Int, x: Float, y: Float) {
         val pi = hitPad(x, y)
         if (pi >= 0) { ptrPad[id] = pi; syncTouch(); return }
-        if (rotR.contains(x, y)) { onRotate(); return }
+        if (helpR.contains(x, y)) { openHelp(); return }
         if (updR.contains(x, y)) { onUpdate(); return }
-        if (fxR.contains(x, y)) { page = (page + 1) % PAGES.size; invalidate(); return }
+        if (fxR.contains(x, y)) { goPage(1); return }
         if (page == 3 && visor.contains(x, y)) {
+            for (i in 0 until 8) if (laneR[i].contains(x, y)) { lane = i; saveFx(); invalidate(); return }
             for (i in 0 until 16) if (stepR[i].contains(x, y)) { toggleStep(i); break }
             return
         }
@@ -681,6 +1013,8 @@ class HiChordView(ctx: Context, private val synth: Synth) : View(ctx) {
         jx = dx; jy = -dy
     }
     override fun onTouchEvent(e: MotionEvent): Boolean {
+        if (helpOpen) return helpTouch(e)
+        if (e.actionMasked == MotionEvent.ACTION_DOWN) navOn = false
         when (e.actionMasked) {
             MotionEvent.ACTION_DOWN, MotionEvent.ACTION_POINTER_DOWN -> { val i = e.actionIndex; down(e.getPointerId(i), e.getX(i), e.getY(i)) }
             MotionEvent.ACTION_MOVE -> for (i in 0 until e.pointerCount) {
@@ -706,17 +1040,17 @@ class HiChordView(ctx: Context, private val synth: Synth) : View(ctx) {
     }
     override fun onDraw(c: Canvas) {
         canvas0 = c
-        val b = bg
-        if (b != null) { c.drawBitmap(b, bgSrc, bgDst, bgPaint); c.drawColor(Color.argb(115, 0, 0, 0)) }
-        else c.drawColor(Color.parseColor("#0b0e14"))
-        txt("HiChord", dp(14f), dp(26f), 18f, Color.WHITE, Paint.Align.LEFT, false, true)
-        rr(rotR, dp(14f), panelC)
-        txt("Girar", rotR.centerX(), rotR.centerY() + dp(4f), 12f, Color.WHITE, Paint.Align.CENTER)
-        rr(updR, dp(14f), if (updHot) accent else panelC)
+        c.drawColor(Color.parseColor("#0b0e14"))
+        txt("HiChord", barL, barY + dp(23f), 18f, Color.WHITE, Paint.Align.LEFT, false, true)
+        rr(updR, dp(16f), if (updHot) accent else panelC)
         txt(updLabel, updR.centerX(), updR.centerY() + dp(4f), 12f, if (updHot) onAccent else Color.WHITE, Paint.Align.CENTER, false, updHot, updR.width() - dp(10f))
-        rr(fxR, dp(14f), if (page != 0) accent else panelC)
+        rr(fxR, dp(16f), if (page != 0) accent else panelC)
         txt((if (synth.playing) "▶ " else "") + PAGES[page], fxR.centerX(), fxR.centerY() + dp(4f), 12f, if (page != 0) onAccent else Color.WHITE, Paint.Align.CENTER, false, page != 0, fxR.width() - dp(8f))
-        txt(if (padSeen) "🎮" else "🎧", width - dp(14f), dp(26f), 16f, accent, Paint.Align.RIGHT)
+        p.style = Paint.Style.FILL; p.shader = null; p.color = if (helpOpen) accent else panelC
+        c.drawCircle(helpR.centerX(), helpR.centerY(), helpR.width() / 2f, p)
+        txt("?", helpR.centerX(), helpR.centerY() + dp(6f), 17f, if (helpOpen) onAccent else Color.WHITE, Paint.Align.CENTER, false, true)
+        val st = if (navOn) (if (width > height) "EDITAR: setas movem · A confirma · B sai" else "EDITAR") else if (padSeen) "🎮" else "🎧"
+        txt(st, helpR.left - dp(10f), barY + dp(23f), if (navOn) 12f else 16f, accent, Paint.Align.RIGHT, false, false, max(dp(40f), helpR.left - fxR.right - dp(24f)))
         // visor
         if (page == 3) drawSteps() else {
         rr(visor, dp(18f), visorC)
@@ -733,7 +1067,7 @@ class HiChordView(ctx: Context, private val synth: Synth) : View(ctx) {
         val name = if (modo == 6) earMsg else if (modo == 5) cname(seqChord, seqMod) else if (cur >= 0) (if (modo == 4) nm(leadNote(cur)) else cname(cur, mod)) else "—"
         txt(name, visor.left + dp(16f), visor.top + dp(62f), 52f, nameC, Paint.Align.LEFT, true, true, visor.width() * 0.55f)
         if (cur >= 0 && modo != 4 && modo != 6) txt(notes(cur, mod).joinToString("  ") { nm(it) }, visor.right - dp(14f), visor.top + dp(24f), 12f, infoC, Paint.Align.RIGHT, true, false, visor.width() * 0.5f)
-        val info = if (modo == 6) "OUVIDO · ${EARL[earLvl].uppercase()} · ACERTOS $earOk/$earTot · SÉRIE $earStreak" else "${MODES[modo].uppercase()} · TOM ${NN[((key % 12) + 12) % 12]} ${if (minor) "MENOR" else "MAIOR"} · ${WAVES[synth.wave].uppercase()} · VOL ${(synth.vol * 100).roundToInt()}%" + (if (mod > 0) " · ${(if (modo == 4) LMODS[mod] else MODS[mod]).uppercase()}" else "")
+        val info = if (modo == 6) "OUVIDO · ${EARL[earLvl].uppercase()} · ACERTOS $earOk/$earTot · SÉRIE $earStreak" else "${MODES[modo].uppercase()} · TOM ${NN[((key % 12) + 12) % 12]} ${if (minor) "MENOR" else "MAIOR"} · ${WAVES[synth.wave].uppercase()}" + (if (mod > 0) " · ${(if (modo == 4) LMODS[mod] else MODS[mod]).uppercase()}" else "")
         txt(info, visor.left + dp(16f), visor.bottom - dp(12f), 11f, infoC, Paint.Align.LEFT, true, false, visor.width() - dp(32f))
         if (page == 2) drawLoopStrip()
         }
@@ -764,6 +1098,14 @@ class HiChordView(ctx: Context, private val synth: Synth) : View(ctx) {
         rr(modeR, dp(18f), panelC)
         txt("MODO" + (if (padSeen) " · Y" else ""), modeR.centerX(), modeR.centerY() - dp(10f), 11f, grayC, Paint.Align.CENTER, false, false, modeR.width() - dp(10f))
         txt(MODES[modo], modeR.centerX(), modeR.centerY() + dp(14f), 19f, accent, Paint.Align.CENTER, false, true, modeR.width() - dp(10f))
+        if (navOn && navValid(navId)) {
+            val r = navRect(navId)
+            p.style = Paint.Style.STROKE; p.strokeWidth = dp(3f); p.color = Color.WHITE; p.shader = null
+            tmpR.set(r.left - dp(2f), r.top - dp(2f), r.right + dp(2f), r.bottom + dp(2f))
+            c.drawRoundRect(tmpR, dp(14f), dp(14f), p)
+            p.style = Paint.Style.FILL
+        }
+        if (helpOpen) drawHelp(c)
         postInvalidateOnAnimation()
     }
 }
