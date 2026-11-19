@@ -1055,6 +1055,7 @@ class HiChordView(ctx: Context, private val synth: Synth) : View(ctx) {
     private val bmpP = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val titleR = RectF(); private val tmpR2 = RectF(); private val dstR = RectF()
     private val sPath = Path()
+    private val scopePath = Path()
     private var bgBmp: Bitmap? = null
     private var splashBg: Shader? = null
     private var splash = true
@@ -1249,7 +1250,7 @@ class HiChordView(ctx: Context, private val synth: Synth) : View(ctx) {
         p.style = Paint.Style.STROKE; p.strokeWidth = 1f; p.color = gridC
         for (i in 1 until 12) { val x = visor.left + visor.width() * i / 12; c.drawLine(x, visor.top, x, visor.bottom, p) }
         for (i in 1 until 6) { val y = visor.top + visor.height() * i / 6; c.drawLine(visor.left, y, visor.right, y, p) }
-        val path = Path(); val n = 256; val sp = synth.scopePos
+        val path = scopePath; path.rewind(); val n = 256; val sp = synth.scopePos
         for (i in 0 until n) {
             val v = synth.scope[(sp + i * 2) % synth.scope.size]
             val x = visor.left + visor.width() * i / (n - 1); val y = visor.centerY() - v * visor.height() * 0.9f

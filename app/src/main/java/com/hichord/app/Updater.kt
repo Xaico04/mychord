@@ -7,7 +7,8 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 object Updater {
-    const val REPO = "Xaico04/mychord"
+    /** vem do build (BuildConfig): cada fork/repositorio atualiza pelas proprias releases */
+    val REPO: String = BuildConfig.REPO
 
     class Info(val version: Long, val tag: String, val url: String, val size: Long)
 

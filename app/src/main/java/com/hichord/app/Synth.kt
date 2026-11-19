@@ -96,22 +96,44 @@ class Synth {
 
     fun start() {
         if (running) return
-        val minBuf = AudioTrack.getMinBufferSize(sr, AudioFormat.CHANNEL_OUT_STEREO, AudioFormat.ENCODING_PCM_FLOAT)
+        val bpf = 2 * 4                                   // bytes por frame (estéreo, float)
+        val minFrames = max(0, AudioTrack.getMinBufferSize(sr, AudioFormat.CHANNEL_OUT_STEREO, AudioFormat.ENCODING_PCM_FLOAT)) / bpf
+        // Capacidade grande + tamanho de trabalho adaptativo: começa pequeno (resposta rápida)
+        // e cresce sozinho se o Android avisar que faltou áudio (underrun = "estalo").
+        val capFrames = max(minFrames * 2, 4096)
         val t = AudioTrack.Builder()
             .setAudioAttributes(AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build())
             .setAudioFormat(AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_PCM_FLOAT).setSampleRate(sr).setChannelMask(AudioFormat.CHANNEL_OUT_STEREO).build())
             .setTransferMode(AudioTrack.MODE_STREAM)
             .setPerformanceMode(AudioTrack.PERFORMANCE_MODE_LOW_LATENCY)
-            .setBufferSizeInBytes(max(minBuf, 512 * 2 * 4)).build()
+            .setBufferSizeInBytes(capFrames * bpf).build()
+        var target = min(capFrames, max(minFrames, 768))   // ~16 ms para começar
+        try { t.bufferSizeInFrames = target } catch (e: Exception) {}
+        // pré-enche com silêncio para o início não faltar áudio
+        try { val z = (target / 2) * 2; t.write(FloatArray(z), 0, z, AudioTrack.WRITE_BLOCKING) } catch (e: Exception) {}   // metade do buffer: nunca trava antes do play()
         track = t; running = true; val my = ++runId; t.play()
         val eng = Engine(this, sr)
         Thread {
+            android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_URGENT_AUDIO)
             val buf = FloatArray(256 * 2)
+            var lastUnder = 0; var n = 0
             while (running && runId == my) {
                 eng.render(buf, 256)
-                t.write(buf, 0, buf.size, AudioTrack.WRITE_BLOCKING)
+                val w = t.write(buf, 0, buf.size, AudioTrack.WRITE_BLOCKING)
+                if (w < 0) break
+                if (++n >= 16) {                           // a cada ~85 ms confere se faltou áudio
+                    n = 0
+                    val u = t.underrunCount
+                    if (u > lastUnder) {
+                        lastUnder = u
+                        if (target < min(capFrames, 2048)) {
+                            target = min(capFrames, min(2048, target + 256))
+                            try { t.bufferSizeInFrames = target } catch (e: Exception) {}
+                        }
+                    }
+                }
             }
-        }.also { it.priority = Thread.MAX_PRIORITY }.start()
+        }.start()
     }
 
     fun stop() {
@@ -166,6 +188,11 @@ private class Engine(private val s: Synth, private val sr: Int) {
     private val lpv = FloatArray(NV); private val prevG = BooleanArray(NV)
     private val mNote = IntArray(NV) { -1 }
     private val tsL = IntArray(NT)
+    private var curW = 0; private var wGain = 1f          // troca de onda sem estalo (fade curto)
+    private val wStep = 1f / (0.004f * sr)
+    private val dR0 = FloatArray(7)                       // nível de partida da bateria (evita degrau ao retocar)
+    private val dAtk = max(1, (sr * 0.0015f).toInt())     // rampa de 1,5 ms no ataque da bateria
+    private val loopFade = (sr * 0.003f).toInt()          // fade de 3 ms nas pontas do loop
     private val fx = Fx(sr)
     private var lp = 0f; private var lfo = 0f
     private var arpCnt = 0; private var arpStep = 0; private var arpWas = false; private var arpVoice = 0
@@ -180,6 +207,20 @@ private class Engine(private val s: Synth, private val sr: Int) {
     private val clapEnd = (sr * 0.03f).toInt(); private val clapPulse = max(1, (sr * 0.01f).toInt())
     // transporte
     private var playing = false; private var stepIdx = 0; private var sub = 0; private var clkAcc = 0f
+
+    /** correção PolyBLEP: tira o "chiado" (aliasing) das ondas serra e quadrada */
+    private fun blep(t: Float, dt: Float): Float {
+        if (t < dt) { val x = t / dt; return x + x - x * x - 1f }
+        if (t > 1f - dt) { val x = (t - 1f) / dt; return x * x + x + x + 1f }
+        return 0f
+    }
+    /** limitador suave: linear (limpo) até 0,6 e curva só acima disso; tanh puro distorcia já em níveis baixos */
+    private fun soft(x: Float): Float {
+        val a = abs(x)
+        if (a <= 0.6f) return x
+        val y = 0.6f + 0.4f * tanh((a - 0.6f) / 0.4f)
+        return if (x < 0f) -y else y
+    }
 
     // ---- MIDI ----
     private fun emit(t: Int, a: Int, b: Int) { if (s.midiOutOn) s.midiQ.offer((t shl 24) or (a shl 8) or b) }
@@ -218,8 +259,10 @@ private class Engine(private val s: Synth, private val sr: Int) {
         dMulP[l] = exp(-1f / (max(0.5f, DK[b + 2]) * 0.001f * sr))
         dMulA[l] = exp(-1f / (max(5f, DK[b + 3]) * 0.001f * sr))
         dTone[l] = DK[b + 4]; dNz[l] = DK[b + 5]; dHp[l] = DK[b + 6]
+        dR0[l] = if (dOn[l]) min(1f, dEnv[l]) else 0f     // retoque: parte do nível atual, sem degrau
+        if (!dOn[l]) dPh[l] = 0f                           // começa a senoide no zero: sem estalo no bumbo/tom
         dEnv[l] = 1f; dAge[l] = 0; dOn[l] = true
-        if (l == 2) dOn[3] = false          // hat fechado corta o aberto
+        if (l == 2 && dOn[3]) dMulA[3] = exp(-1f / (0.006f * sr))   // hat fechado abafa o aberto em 6 ms (antes: corte seco)
         emit(3, GM[l], 100)
     }
 
@@ -250,6 +293,7 @@ private class Engine(private val s: Synth, private val sr: Int) {
         val rvM = s.rvMix; val dlM = s.dlMix; val chM = s.chMix; val flM = s.flMix; val dlT = s.dlTimeMs
         val stepLen = max(1, (sr * 60f / max(40, s.bpm) / 4f).toInt())   // semicolcheia
         val total = 16 * max(1, s.bars)
+        val loopLen = total * stepLen
         val dir = s.arpDir
         val dv = s.drumVol
         val mClk = s.midiClock
@@ -313,6 +357,8 @@ private class Engine(private val s: Synth, private val sr: Int) {
             var lfoS = 0f
             if (vb > 0f) { lfo += 5.5f / sr; if (lfo >= 1f) lfo -= 1f; lfoS = sin(twoPi * lfo) }
 
+            if (curW != w) { wGain -= wStep; if (wGain <= 0f) { wGain = 0f; curW = w } }
+            else if (wGain < 1f) { wGain = min(1f, wGain + wStep) }
             var sum = 0f
             for (k in 0 until NV) {
                 if (cnt[k] > 0) { cnt[k]--; if (cnt[k] == 0) { s.freq[k] = s.tf[k]; hold[k] = 0; on(k) } }
@@ -332,14 +378,18 @@ private class Engine(private val s: Synth, private val sr: Int) {
                 if (vb > 0f) f *= 1f + vb * 0.0578f * lfoS
                 phase[k] += f / sr; if (phase[k] >= 1f) phase[k] -= 1f
                 val p = phase[k]
-                var o = when (w) {
+                val dt = min(0.45f, f / sr)
+                var o = when (curW) {
                     0 -> sin(twoPi * p)
                     1 -> 4f * abs(p - 0.5f) - 1f
-                    2 -> 2f * p - 1f
-                    else -> if (p < 0.5f) 1f else -1f
+                    2 -> 2f * p - 1f - blep(p, dt)
+                    else -> {
+                        var q = p + 0.5f; if (q >= 1f) q -= 1f
+                        (if (p < 0.5f) 1f else -1f) + blep(p, dt) - blep(q, dt)
+                    }
                 }
                 if (pl) { lpv[k] += (0.05f + 0.5f * e * e) * (o - lpv[k]); o = lpv[k] }
-                sum += o * e
+                sum += o * e * wGain
             }
             lp += 0.25f * (sum * 0.25f - lp)
             fx.process(lp, rvM, dlM, chM, flM, dlT)
@@ -353,7 +403,12 @@ private class Engine(private val s: Synth, private val sr: Int) {
                     if (ts == 2 || ts == 3) {
                         val b = s.trackBuf[k]
                         if (b != null && ix + 1 < b.size) {
-                            if (ts == 2) { b[ix] = fx.outL; b[ix + 1] = fx.outR } else { lL += b[ix]; lR += b[ix + 1] }
+                            if (ts == 2) { b[ix] = fx.outL; b[ix + 1] = fx.outR }
+                            else {
+                                val edge = min(loopPos, loopLen - 1 - loopPos)
+                                val lg = if (edge < loopFade) max(0, edge).toFloat() / loopFade else 1f
+                                lL += b[ix] * lg; lR += b[ix + 1] * lg
+                            }
                         }
                     }
                 }
@@ -373,6 +428,7 @@ private class Engine(private val s: Synth, private val sr: Int) {
                 val hp = dHp[l]
                 if (hp > 0f) { dLp[l] += hp * (nz - dLp[l]); nn = nz - dLp[l] }
                 var amp = e
+                if (dAge[l] < dAtk) amp *= dR0[l] + (1f - dR0[l]) * (dAge[l].toFloat() / dAtk)
                 if (l == 4 && dAge[l] < clapEnd) amp *= 1f - 0.6f * ((dAge[l] % clapPulse).toFloat() / clapPulse)
                 ds += amp * (dTone[l] * tone + dNz[l] * nn) * LG[l]
                 e *= dMulA[l]; dEnv[l] = e; dAge[l]++
@@ -380,8 +436,8 @@ private class Engine(private val s: Synth, private val sr: Int) {
             }
             val dOut = ds * dv
 
-            val oL = tanh((fx.outL + lL * 0.9f + dOut) * vol)
-            val oR = tanh((fx.outR + lR * 0.9f + dOut) * vol)
+            val oL = soft((fx.outL + lL * 0.9f + dOut) * vol)
+            val oR = soft((fx.outR + lR * 0.9f + dOut) * vol)
             out[2 * i] = oL; out[2 * i + 1] = oR
             if (i % 4 == 0) { s.scope[s.scopePos] = oL; s.scopePos = (s.scopePos + 1) % s.scope.size }
         }
@@ -394,7 +450,7 @@ private class Engine(private val s: Synth, private val sr: Int) {
 // =====================================================================
 private class DLine(private val len: Int) {
     private val buf = FloatArray(len); private var w = 0
-    fun push(v: Float) { buf[w] = v; w++; if (w >= len) w = 0 }
+    fun push(v: Float) { buf[w] = if (v < 1e-18f && v > -1e-18f) 0f else v; w++; if (w >= len) w = 0 }
     /** d = atraso em amostras (>= 1 e <= len - 2), contado a partir da última amostra gravada */
     fun read(d: Float): Float {
         var r = (w - 1) - d
