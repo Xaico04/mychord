@@ -1,10 +1,20 @@
-HiChord para Android (app nativo) - como gerar o APK sem instalar nada
+MyChord para Android (app nativo, antigo HiChord) - como gerar o APK sem instalar nada
 
 1. Crie um repositorio no github.com (pode ser privado) e envie o conteudo desta pasta.
 2. A pasta oculta .github/workflows/build.yml precisa estar no repositorio
    (se o upload nao levar, use Add file > Create new file e digite .github/workflows/build.yml).
 3. Abra a aba Actions > "Build APK" e espere uns 5 a 10 minutos.
 4. Baixe o artefato "HiChord-apk" (zip com o app-debug.apk) e instale no celular.
+
+VISUAL NOVO (paleta "Synthos", inspirada no episodio "Gary's Synthesizer", de Apenas um Show)
+- Capa animada ao abrir o app: sol de raios, planeta Synthos, o rei do sintetizador e cabos de patch.
+  Fecha sozinha em ~4 s, ou toque na tela / aperte um botao. Toque no nome "MyChord" (canto superior esquerdo) para rever a capa.
+- Cada pad (grau I a VII) tem a cor de um cabo de patch. Botoes "de brinquedo" com degrau embaixo.
+- Visor com tela de LCD creme e moldura de madeira, como nos sintetizadores antigos.
+- Icone do app novo (res/drawable/mascote.xml e ic_launcher_*.xml).
+- Quer usar uma imagem sua na capa? Salve como app/src/main/assets/mascote.png (quadrada, fundo transparente fica melhor).
+  Se o arquivo existir, ele substitui o desenho do mascote.
+- O pacote interno continua com.hichord.app de proposito: assim o botao Atualizar continua instalando por cima do app antigo.
 
 Tela: abre sempre deitado e so gira para vertical se a rotacao automatica do celular estiver LIGADA.
 Volume: o app sempre toca em 100%; use os botoes de volume do celular.

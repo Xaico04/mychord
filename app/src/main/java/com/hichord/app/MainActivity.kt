@@ -124,7 +124,7 @@ class MainActivity : Activity() {
     }
     private fun startDownload(info: Updater.Info) {
         if (Build.VERSION.SDK_INT >= 26 && !packageManager.canRequestPackageInstalls()) {
-            toast("Permita \"instalar apps desta fonte\" para o HiChord e toque em Atualizar de novo")
+            toast("Permita \"instalar apps desta fonte\" para o MyChord e toque em Atualizar de novo")
             try { startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName"))) } catch (e: Exception) {}
             return
         }

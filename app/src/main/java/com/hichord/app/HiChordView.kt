@@ -2,6 +2,9 @@ package com.hichord.app
 import android.content.Context
 import android.graphics.*
 import android.os.Build
+import android.os.SystemClock
+import android.graphics.drawable.Drawable
+import androidx.core.content.ContextCompat
 import android.view.*
 import android.widget.Toast
 import kotlin.math.*
@@ -33,7 +36,6 @@ class HiChordView(ctx: Context, private val synth: Synth) : View(ctx) {
     private val visor = RectF(); private var jcx = 0f; private var jcy = 0f; private var jr = 1f
     private val ptrPad = HashMap<Int, Int>(); private var joyPtr = -1
     private val p = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val teal = Color.parseColor("#5eead4"); private val pink = Color.parseColor("#f472b6")
     private fun dp(v: Float) = v * resources.displayMetrics.density
 
     // ---------- modos de toque e efeitos ----------
@@ -318,18 +320,18 @@ class HiChordView(ctx: Context, private val synth: Synth) : View(ctx) {
         // seletor de pista: toque direto no nome do instrumento (pista com som fica com tom mais claro)
         for (i in 0 until 8) {
             val on = i == lane
-            val bgc = if (on) accent else if (laneHas(i)) mix(panelC, accent, 0.35f) else panelC
+            val bgc = if (on) accent2 else if (laneHas(i)) laneSoundC else panelC
             rr(laneR[i], dp(10f), bgc)
-            txt(LSH[i], laneR[i].centerX(), laneR[i].centerY() + dp(4f), 10f, if (on) onAccent else Color.WHITE, Paint.Align.CENTER, false, on, laneR[i].width() - dp(4f))
+            txt(LSH[i], laneR[i].centerX(), laneR[i].centerY() + dp(4f), 10f, if (on) onAccent else creamC, Paint.Align.CENTER, false, on, laneR[i].width() - dp(4f))
         }
         val cur16 = if (synth.playing) synth.uiStep % 16 else -1
         for (i in 0 until 16) {
             val r = stepR[i]; val v = synth.pat[lane * 16 + i].toInt()
-            val c = if (v > 0) accent else if (i % 4 == 0) mix(panelC, Color.WHITE, 0.18f) else mix(panelC, Color.WHITE, 0.07f)
+            val c = if (v > 0) stepOnC else if (i % 4 == 0) stepBeatC else stepOffC
             rr(r, dp(6f), c)
             if (v > 0 && lane == 7) txt(v.toString(), r.centerX(), r.centerY() + dp(5f), 13f, onAccent, Paint.Align.CENTER, false, true)
             if (i == cur16) {
-                p.style = Paint.Style.STROKE; p.strokeWidth = dp(2f); p.color = Color.WHITE
+                p.style = Paint.Style.STROKE; p.strokeWidth = dp(2.5f); p.color = inkC
                 canvas0.drawRoundRect(r, dp(6f), dp(6f), p)
                 p.style = Paint.Style.FILL
             }
@@ -340,14 +342,14 @@ class HiChordView(ctx: Context, private val synth: Synth) : View(ctx) {
         val total = 16 * synth.bars
         val prog = if (synth.playing) (synth.uiStep + 0.5f) / total else 0f
         val by = visor.bottom - dp(46f)
-        tmpR.set(x0, by, x1, by + dp(3f)); rr(tmpR, dp(2f), Color.argb(50, 255, 255, 255))
-        tmpR.set(x0, by, x0 + (x1 - x0) * prog, by + dp(3f)); rr(tmpR, dp(2f), accent)
+        tmpR.set(x0, by, x1, by + dp(3f)); rr(tmpR, dp(2f), Color.argb(60, 90, 50, 20))
+        tmpR.set(x0, by, x0 + (x1 - x0) * prog, by + dp(3f)); rr(tmpR, dp(2f), stepOnC)
         val cw = (x1 - x0) / 6f
         for (k in 0 until 6) {
             val st = synth.tState.get(k)
-            val c = when (st) { 0 -> Color.argb(40, 255, 255, 255); 1 -> mix(accent, Color.BLACK, 0.5f); 2 -> Color.rgb(239, 68, 68); 3 -> accent; else -> grayC }
+            val c = when (st) { 0 -> Color.argb(50, 90, 50, 20); 1 -> mix(stepOnC, visorC, 0.55f); 2 -> Color.rgb(229, 57, 53); 3 -> stepOnC; else -> Color.argb(120, 90, 50, 20) }
             tmpR.set(x0 + k * cw + dp(2f), by + dp(8f), x0 + (k + 1) * cw - dp(2f), by + dp(26f)); rr(tmpR, dp(6f), c)
-            txt((k + 1).toString(), tmpR.centerX(), tmpR.centerY() + dp(4f), 11f, if (st == 0) grayC else onAccent, Paint.Align.CENTER, false, true)
+            txt((k + 1).toString(), tmpR.centerX(), tmpR.centerY() + dp(4f), 11f, if (st == 0) infoC else onAccent, Paint.Align.CENTER, false, true)
         }
     }
     private fun fxText(i: Int): String = when (i) {
@@ -370,16 +372,28 @@ class HiChordView(ctx: Context, private val synth: Synth) : View(ctx) {
         pushFx(); saveFx(); invalidate()
     }
 
-    // ---------- cores ----------
-    private val accent = teal
-    private val accent2 = pink
-    private val panelC = Color.parseColor("#1b2232")
-    private val visorC = Color.parseColor("#05080d")
-    private val gridC = Color.parseColor("#12323a")
-    private val nameC = Color.parseColor("#c9fff6")
-    private val infoC = Color.parseColor("#9fe9dc")
-    private val onAccent = Color.parseColor("#06201c")
-    private val grayC = Color.parseColor("#9aa4b5")
+    // ---------- cores: paleta "Synthos" (roxo-uva, creme, madeira e cores de cabo de patch) ----------
+    private val accent = Color.parseColor("#ffc83d")      // mostarda
+    private val accent2 = Color.parseColor("#ff6fa5")     // rosa
+    private val panelC = Color.parseColor("#4a3068")      // botões
+    private val visorC = Color.parseColor("#fff0cf")      // tela de LCD creme
+    private val gridC = Color.parseColor("#efd9a8")
+    private val nameC = Color.parseColor("#3b1f5c")
+    private val infoC = Color.parseColor("#8a5a2b")
+    private val onAccent = Color.parseColor("#2a1a3d")
+    private val grayC = Color.parseColor("#c3b0e0")
+    private val creamC = Color.parseColor("#fff3d9")
+    private val inkC = Color.parseColor("#2a1a3d")
+    private val woodC = Color.parseColor("#a8683c")
+    private val scopeC = Color.parseColor("#c2255c")
+    private val stepOnC = Color.parseColor("#ff6f61")
+    private val stepBeatC = Color.parseColor("#e6c98e")
+    private val stepOffC = Color.parseColor("#f2dfb2")
+    private val laneSoundC = Color.parseColor("#7a4fa3")
+    // um cabo de cor para cada grau (I a VII)
+    private val PADC = intArrayOf(
+        Color.parseColor("#ff6f61"), Color.parseColor("#ff9f43"), Color.parseColor("#ffd23f"), Color.parseColor("#6fd3a0"),
+        Color.parseColor("#4cc9f0"), Color.parseColor("#9b8cff"), Color.parseColor("#ff7eb6"))
 
     private fun mix(a: Int, b: Int, t: Float) = Color.rgb(
         (Color.red(a) * (1 - t) + Color.red(b) * t).toInt(),
@@ -544,6 +558,7 @@ class HiChordView(ctx: Context, private val synth: Synth) : View(ctx) {
 
     // ---------- controle ----------
     fun onPadKey(code: Int, down: Boolean, rep: Int): Boolean {
+        if (splash) { if (down) { splash = false; invalidate() }; return true }
         val ci = when (code) {
             KeyEvent.KEYCODE_BUTTON_L1 -> 0
             KeyEvent.KEYCODE_BUTTON_R1 -> 1
@@ -611,6 +626,7 @@ class HiChordView(ctx: Context, private val synth: Synth) : View(ctx) {
         return false
     }
     fun onPadMotion(e: MotionEvent) {
+        if (splash) return
         padSeen = true
         fun dz(v: Float) = if (abs(v) < 0.2f) 0f else v
         val ax = dz(e.getAxisValue(MotionEvent.AXIS_X)); val ay = -dz(e.getAxisValue(MotionEvent.AXIS_Y))
@@ -649,7 +665,7 @@ class HiChordView(ctx: Context, private val synth: Synth) : View(ctx) {
     private val HT = arrayOf("Início", "Acordes", "Modos", "Efeitos", "Bateria", "Loop", "MIDI", "Controle")
     private val HELP = arrayOf(
         arrayOf(
-            "# O que é o HiChord",
+            "# O que é o MyChord",
             "Um sintetizador de acordes de bolso: você toca acordes prontos da tonalidade escolhida, sem precisar saber teoria. Dá para tocar na tela ou com um controle Bluetooth.",
             "# A tela",
             "• Visor (canto superior esquerdo): mostra o acorde que está soando, suas notas, a forma de onda e um resumo com modo, tom e timbre.",
@@ -743,7 +759,7 @@ class HiChordView(ctx: Context, private val synth: Synth) : View(ctx) {
         ),
         arrayOf(
             "# Página MIDI",
-            "Serve para ligar o HiChord a teclados, computadores e outros equipamentos pela porta USB (cabo OTG).",
+            "Serve para ligar o MyChord a teclados, computadores e outros equipamentos pela porta USB (cabo OTG).",
             "• MIDI: cada toque passa pelo próximo dispositivo encontrado. Depois do último, desliga.",
             "• Canal: canal MIDI usado nas notas enviadas (1 a 16). A bateria sai no canal 10.",
             "• Saída: envia para fora as notas que você toca e a bateria.",
@@ -842,7 +858,7 @@ class HiChordView(ctx: Context, private val synth: Synth) : View(ctx) {
         helpLayoutView(); buildHelp()
         helpMax = max(0f, helpH - helpView.height()); helpScroll = helpScroll.coerceIn(0f, helpMax)
         c.drawColor(Color.argb(190, 0, 0, 0))
-        rr(helpPanel, dp(18f), Color.rgb(14, 19, 29))
+        rr(helpPanel, dp(18f), Color.rgb(47, 29, 69))
         txt("Ajuda · " + HT[helpSec], helpPanel.left + dp(16f), helpPanel.top + dp(32f), 17f, Color.WHITE, Paint.Align.LEFT, false, true, helpClose.left - helpPanel.left - dp(24f))
         rr(helpClose, dp(14f), panelC)
         txt("×", helpClose.centerX(), helpClose.centerY() + dp(7f), 22f, Color.WHITE, Paint.Align.CENTER, false, true)
@@ -856,7 +872,7 @@ class HiChordView(ctx: Context, private val synth: Synth) : View(ctx) {
             val y = helpView.top + l.y - helpScroll
             if (y < helpView.top - dp(24f) || y > helpView.bottom + dp(24f)) continue
             if (l.kind == 1) txt(l.s, helpView.left + l.x, y, 15f, accent, Paint.Align.LEFT, false, true)
-            else txt(l.s, helpView.left + l.x, y, 13f, Color.rgb(214, 221, 233), Paint.Align.LEFT)
+            else txt(l.s, helpView.left + l.x, y, 13f, Color.rgb(241, 230, 255), Paint.Align.LEFT)
         }
         c.restore()
         if (helpMax > 0f) {
@@ -968,6 +984,8 @@ class HiChordView(ctx: Context, private val synth: Synth) : View(ctx) {
         helpPanel.set(L - dp(4f), T, R + dp(4f), B + dp(4f))
         helpClose.set(helpPanel.right - dp(44f), helpPanel.top + dp(8f), helpPanel.right - dp(10f), helpPanel.top + dp(40f))
         helpKey = ""
+        titleR.set(barL, barY, barL + dp(92f), barY + barH)
+        bgBmp = null; splashBg = null
         if (Build.VERSION.SDK_INT >= 29) systemGestureExclusionRects = listOf(Rect(0, 0, w, h))
     }
 
@@ -981,6 +999,7 @@ class HiChordView(ctx: Context, private val synth: Synth) : View(ctx) {
         val pi = hitPad(x, y)
         if (pi >= 0) { ptrPad[id] = pi; syncTouch(); return }
         if (helpR.contains(x, y)) { openHelp(); return }
+        if (titleR.contains(x, y)) { openSplash(); return }
         if (updR.contains(x, y)) { onUpdate(); return }
         if (fxR.contains(x, y)) { goPage(1); return }
         if (page == 3 && visor.contains(x, y)) {
@@ -1013,6 +1032,7 @@ class HiChordView(ctx: Context, private val synth: Synth) : View(ctx) {
         jx = dx; jy = -dy
     }
     override fun onTouchEvent(e: MotionEvent): Boolean {
+        if (splash) { if (e.actionMasked == MotionEvent.ACTION_UP) { splash = false; invalidate() }; return true }
         if (helpOpen) return helpTouch(e)
         if (e.actionMasked == MotionEvent.ACTION_DOWN) navOn = false
         when (e.actionMasked) {
@@ -1028,6 +1048,25 @@ class HiChordView(ctx: Context, private val synth: Synth) : View(ctx) {
     }
 
     // ---------- desenho ----------
+    private val SANS_BLACK: Typeface = Typeface.create("sans-serif-black", Typeface.NORMAL)
+    private val mascot: Drawable? = ContextCompat.getDrawable(ctx, R.drawable.mascote)
+    // opcional: coloque uma imagem em app/src/main/assets/mascote.png e ela substitui o desenho da capa
+    private val mascotBmp: Bitmap? = try { ctx.assets.open("mascote.png").use { BitmapFactory.decodeStream(it) } } catch (e: Exception) { null }
+    private val bmpP = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
+    private val titleR = RectF(); private val tmpR2 = RectF(); private val dstR = RectF()
+    private val sPath = Path()
+    private var bgBmp: Bitmap? = null
+    private var splashBg: Shader? = null
+    private var splash = true
+    private var splashT0 = SystemClock.uptimeMillis()
+    private var splashEnd = splashT0 + 4200L   // some sozinha; tocar na tela ou apertar um botão também fecha
+
+    private fun openSplash() {
+        ptrPad.clear(); syncTouch(); joyPtr = -1; jx = 0f; jy = 0f
+        splash = true; splashT0 = SystemClock.uptimeMillis(); splashEnd = Long.MAX_VALUE
+        refresh()
+    }
+
     private fun rr(r: RectF, rad: Float, c: Int) { p.style = Paint.Style.FILL; p.color = c; p.shader = null; canvas0.drawRoundRect(r, rad, rad, p) }
     private lateinit var canvas0: Canvas
     private fun txt(s: String, x: Float, y: Float, size: Float, c: Int, a: Paint.Align, mono: Boolean = false, bold: Boolean = false, maxW: Float = 0f) {
@@ -1038,19 +1077,172 @@ class HiChordView(ctx: Context, private val synth: Synth) : View(ctx) {
         canvas0.drawText(s, x, y, p)
         p.isFakeBoldText = false
     }
+    /** botão "de brinquedo": um degrauzinho mais escuro embaixo; apertado, ele afunda */
+    private fun chunky(r: RectF, rad: Float, face: Int, down: Boolean, lip: Float) {
+        tmpR2.set(r.left, r.top + lip, r.right, r.bottom + lip); rr(tmpR2, rad, mix(face, Color.BLACK, 0.38f))
+        val o = if (down) lip * 0.7f else 0f
+        tmpR2.set(r.left, r.top + o, r.right, r.bottom + o); rr(tmpR2, rad, face)
+    }
+
+    /** fundo roxo com estrelinhas e notas bem fracas, desenhado uma vez só e guardado */
+    private fun buildBg() {
+        val w = width; val h = height
+        if (w <= 0 || h <= 0) return
+        val bm = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+        val cv = Canvas(bm); val bp = Paint(Paint.ANTI_ALIAS_FLAG)
+        bp.shader = LinearGradient(0f, 0f, 0f, h.toFloat(), Color.parseColor("#3d2560"), Color.parseColor("#22132f"), Shader.TileMode.CLAMP)
+        cv.drawRect(0f, 0f, w.toFloat(), h.toFloat(), bp); bp.shader = null
+        var seed = 20261118
+        fun rnd(): Float { seed = seed * 1664525 + 1013904223; return ((seed ushr 8) % 1000) / 1000f }
+        bp.textAlign = Paint.Align.CENTER
+        for (i in 0 until 48) {
+            val x = rnd() * w; val y = rnd() * h
+            if (i % 3 == 0) {
+                bp.color = Color.argb(34, 255, 255, 255); bp.textSize = dp(14f + rnd() * 14f)
+                cv.drawText(if (i % 2 == 0) "♪" else "♫", x, y, bp)
+            } else {
+                bp.color = Color.argb(60 + (rnd() * 50).toInt(), 255, 232, 180)
+                cv.drawCircle(x, y, dp(1f + rnd() * 1.6f), bp)
+            }
+        }
+        bgBmp = bm
+    }
+
+    private fun drawTitle() {
+        val s = "MyChord"
+        p.style = Paint.Style.FILL; p.shader = null; p.typeface = SANS_BLACK; p.textAlign = Paint.Align.LEFT
+        p.textSize = dp(21f)
+        var tw = 0f; for (ch in s) tw += p.measureText(ch.toString())
+        p.textSize = dp(21f) * min(1f, dp(90f) / tw)
+        var x = barL; val y = barY + dp(24f)
+        for (i in s.indices) {
+            val ch = s[i].toString()
+            p.color = inkC; canvas0.drawText(ch, x + dp(1.2f), y + dp(1.6f), p)
+            p.color = PADC[i % 7]; canvas0.drawText(ch, x, y, p)
+            x += p.measureText(ch)
+        }
+    }
+
+    /** capa: sol de raios, planeta Synthos, o rei do sintetizador e cabos de patch */
+    private fun drawSplash(c: Canvas) {
+        val W = width.toFloat(); val H = height.toFloat(); val u = min(W, H)
+        val now = SystemClock.uptimeMillis()
+        if (now > splashEnd) { splash = false; return }
+        val t = (now - splashT0) / 1000f
+        val deg = PI.toFloat() / 180f
+        val land = W >= H
+        p.style = Paint.Style.FILL
+        if (splashBg == null) splashBg = LinearGradient(0f, 0f, 0f, H, Color.parseColor("#5a2f8e"), Color.parseColor("#1f1230"), Shader.TileMode.CLAMP)
+        p.shader = splashBg; c.drawRect(0f, 0f, W, H, p); p.shader = null
+        // raios girando devagar
+        val cx = if (land) W * 0.27f else W * 0.5f; val cy = if (land) H * 0.52f else H * 0.30f
+        val rad = hypot(W, H); val n = 18; val stp = 360f / n
+        p.color = Color.argb(40, 255, 205, 110)
+        for (i in 0 until n step 2) {
+            val a0 = (i * stp + t * 5f) * deg; val a1 = a0 + stp * deg
+            sPath.reset(); sPath.moveTo(cx, cy)
+            sPath.lineTo(cx + rad * cos(a0), cy + rad * sin(a0)); sPath.lineTo(cx + rad * cos(a1), cy + rad * sin(a1)); sPath.close()
+            c.drawPath(sPath, p)
+        }
+        // estrelas piscando
+        for (i in 0 until 26) {
+            val sx = ((i * 97 + 13) % 100) / 100f * W; val sy = ((i * 53 + 7) % 100) / 100f * H
+            p.color = Color.argb((110 + 100 * sin(t * 2.2f + i)).toInt().coerceIn(0, 255), 255, 236, 190)
+            c.drawCircle(sx, sy, dp(1.2f + (i % 3) * 0.7f), p)
+        }
+        // planeta Synthos, com anel
+        val px = if (land) W * 0.88f else W * 0.82f; val py = if (land) H * 0.20f else H * 0.10f; val pr = u * 0.10f
+        c.save(); c.rotate(-20f, px, py)
+        tmpR.set(px - pr * 2.0f, py - pr * 0.55f, px + pr * 2.0f, py + pr * 0.55f)
+        p.style = Paint.Style.STROKE; p.strokeWidth = dp(5f); p.color = accent
+        c.drawArc(tmpR, 180f, 180f, false, p)
+        p.style = Paint.Style.FILL; p.color = Color.parseColor("#ff8c5a"); c.drawCircle(px, py, pr, p)
+        p.color = Color.parseColor("#e0683c"); c.drawCircle(px - pr * 0.35f, py - pr * 0.25f, pr * 0.2f, p); c.drawCircle(px + pr * 0.30f, py + pr * 0.35f, pr * 0.13f, p)
+        p.style = Paint.Style.STROKE; p.strokeWidth = dp(5f); p.color = accent
+        c.drawArc(tmpR, 0f, 180f, false, p)
+        c.restore()
+        p.style = Paint.Style.FILL
+        // mascote
+        val ms = if (land) min(H * 0.80f, W * 0.40f) else W * 0.74f
+        val mx = if (land) W * 0.05f else (W - ms) / 2f
+        val my0 = if (land) (H - ms) / 2f - H * 0.02f else H * 0.08f
+        val my = my0 + sin(t * 2.2f) * dp(4f)
+        p.color = Color.argb(60, 0, 0, 0)
+        tmpR.set(mx + ms * 0.18f, my0 + ms * 0.95f, mx + ms * 0.82f, my0 + ms * 1.01f)
+        c.drawOval(tmpR, p)
+        val bmp = mascotBmp
+        if (bmp != null) { dstR.set(mx, my, mx + ms, my + ms); c.drawBitmap(bmp, null, dstR, bmpP) }
+        else {
+            val d = mascot
+            if (d != null) { d.setBounds(mx.toInt(), my.toInt(), (mx + ms).toInt(), (my + ms).toInt()); d.draw(c) }
+        }
+        // título: cada letra de uma cor, pulando
+        val title = "MyChord"
+        val tx0 = if (land) W * 0.44f else W * 0.05f; val avail = if (land) W * 0.52f else W * 0.90f
+        val ty = if (land) H * 0.50f else H * 0.62f
+        p.typeface = SANS_BLACK; p.textSize = u * 0.24f
+        val gap = dp(2f)
+        var tw = p.measureText(title) + (title.length - 1) * gap
+        if (tw > avail) { p.textSize = p.textSize * avail / tw; tw = avail }
+        var x = tx0 + (avail - tw) / 2f
+        p.textAlign = Paint.Align.CENTER
+        for (i in title.indices) {
+            val ch = title[i].toString(); val w = p.measureText(ch)
+            val bob = sin(t * 3.2f + i * 0.8f) * dp(5f); val rot = sin(t * 2.4f + i * 1.1f) * 4f
+            c.save(); c.translate(x + w / 2f, ty + bob); c.rotate(rot)
+            p.style = Paint.Style.FILL; p.color = Color.argb(90, 0, 0, 0); c.drawText(ch, dp(3f), dp(5f), p)
+            p.style = Paint.Style.STROKE; p.strokeWidth = dp(7f); p.strokeJoin = Paint.Join.ROUND; p.color = inkC; c.drawText(ch, 0f, 0f, p)
+            p.style = Paint.Style.FILL; p.color = PADC[i % 7]; c.drawText(ch, 0f, 0f, p)
+            c.restore()
+            x += w + gap
+        }
+        p.typeface = Typeface.DEFAULT; p.style = Paint.Style.FILL
+        val cxT = tx0 + avail / 2f
+        val ud = u / resources.displayMetrics.density   // lado menor da tela em dp
+        txt("sintetizador de acordes", cxT, ty + u * 0.11f, ud * 0.05f, creamC, Paint.Align.CENTER, false, true, avail)
+        txt("♪ direto do planeta Synthos ♪", cxT, ty + u * 0.18f, ud * 0.04f, accent, Paint.Align.CENTER, false, false, avail)
+        // cabos de patch pendurados
+        val cab = intArrayOf(PADC[0], PADC[4], PADC[2])
+        for (k in 0 until 3) {
+            val x0 = W * (if (land) 0.43f + 0.05f * k else 0.08f + 0.05f * k); val y0 = H * (0.80f + 0.035f * k)
+            val x1 = W * (0.98f - 0.04f * k); val y1 = H * (0.84f + 0.03f * k)
+            val sag = u * (0.09f + 0.03f * k) + sin(t * 2f + k) * dp(4f)
+            sPath.reset(); sPath.moveTo(x0, y0)
+            sPath.cubicTo(x0 + (x1 - x0) * 0.25f, y0 + sag, x0 + (x1 - x0) * 0.75f, y1 + sag, x1, y1)
+            p.style = Paint.Style.STROKE; p.strokeCap = Paint.Cap.ROUND
+            p.strokeWidth = dp(10f); p.color = inkC; c.drawPath(sPath, p)
+            p.strokeWidth = dp(6f); p.color = cab[k]; c.drawPath(sPath, p)
+            p.style = Paint.Style.FILL
+            for (e in 0..1) {
+                val ex = if (e == 0) x0 else x1; val ey = if (e == 0) y0 else y1
+                p.color = inkC; c.drawCircle(ex, ey, dp(9f), p); p.color = creamC; c.drawCircle(ex, ey, dp(5f), p)
+            }
+        }
+        p.strokeCap = Paint.Cap.BUTT
+        // convite piscando
+        val al = (120 + 135 * (0.5f + 0.5f * sin(t * 4f))).toInt().coerceIn(0, 255)
+        txt("toque para começar", cxT, ty + u * 0.27f, ud * 0.045f, Color.argb(al, 255, 243, 217), Paint.Align.CENTER, false, true, avail)
+    }
+
     override fun onDraw(c: Canvas) {
         canvas0 = c
-        c.drawColor(Color.parseColor("#0b0e14"))
-        txt("HiChord", barL, barY + dp(23f), 18f, Color.WHITE, Paint.Align.LEFT, false, true)
-        rr(updR, dp(16f), if (updHot) accent else panelC)
-        txt(updLabel, updR.centerX(), updR.centerY() + dp(4f), 12f, if (updHot) onAccent else Color.WHITE, Paint.Align.CENTER, false, updHot, updR.width() - dp(10f))
-        rr(fxR, dp(16f), if (page != 0) accent else panelC)
-        txt((if (synth.playing) "▶ " else "") + PAGES[page], fxR.centerX(), fxR.centerY() + dp(4f), 12f, if (page != 0) onAccent else Color.WHITE, Paint.Align.CENTER, false, page != 0, fxR.width() - dp(8f))
+        if (bgBmp == null) buildBg()
+        val bm = bgBmp
+        if (bm != null) c.drawBitmap(bm, 0f, 0f, null) else c.drawColor(Color.parseColor("#2a1a3d"))
+        if (splash) { drawSplash(c); postInvalidateOnAnimation(); return }
+        drawTitle()
+        chunky(updR, dp(16f), if (updHot) accent else panelC, false, dp(2f))
+        txt(updLabel, updR.centerX(), updR.centerY() + dp(4f), 12f, if (updHot) onAccent else creamC, Paint.Align.CENTER, false, updHot, updR.width() - dp(10f))
+        chunky(fxR, dp(16f), if (page != 0) accent else panelC, false, dp(2f))
+        txt((if (synth.playing) "▶ " else "") + PAGES[page], fxR.centerX(), fxR.centerY() + dp(4f), 12f, if (page != 0) onAccent else creamC, Paint.Align.CENTER, false, page != 0, fxR.width() - dp(8f))
         p.style = Paint.Style.FILL; p.shader = null; p.color = if (helpOpen) accent else panelC
         c.drawCircle(helpR.centerX(), helpR.centerY(), helpR.width() / 2f, p)
-        txt("?", helpR.centerX(), helpR.centerY() + dp(6f), 17f, if (helpOpen) onAccent else Color.WHITE, Paint.Align.CENTER, false, true)
+        txt("?", helpR.centerX(), helpR.centerY() + dp(6f), 17f, if (helpOpen) onAccent else creamC, Paint.Align.CENTER, false, true)
         val st = if (navOn) (if (width > height) "EDITAR: setas movem · A confirma · B sai" else "EDITAR") else if (padSeen) "🎮" else "🎧"
         txt(st, helpR.left - dp(10f), barY + dp(23f), if (navOn) 12f else 16f, accent, Paint.Align.RIGHT, false, false, max(dp(40f), helpR.left - fxR.right - dp(24f)))
+        // moldura de madeira do visor, como nos sintetizadores antigos
+        tmpR2.set(visor.left - dp(5f), visor.top - dp(4f), visor.right + dp(5f), visor.bottom + dp(6f)); rr(tmpR2, dp(22f), mix(woodC, Color.BLACK, 0.40f))
+        tmpR2.set(visor.left - dp(5f), visor.top - dp(4f), visor.right + dp(5f), visor.bottom + dp(4f)); rr(tmpR2, dp(22f), woodC)
         // visor
         if (page == 3) drawSteps() else {
         rr(visor, dp(18f), visorC)
@@ -1063,7 +1255,10 @@ class HiChordView(ctx: Context, private val synth: Synth) : View(ctx) {
             val x = visor.left + visor.width() * i / (n - 1); val y = visor.centerY() - v * visor.height() * 0.9f
             if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
         }
-        p.color = accent; p.strokeWidth = dp(2f); p.setShadowLayer(dp(8f), 0f, 0f, accent); c.drawPath(path, p); p.clearShadowLayer()
+        p.strokeJoin = Paint.Join.ROUND; p.strokeCap = Paint.Cap.ROUND
+        p.color = Color.argb(46, 194, 37, 92); p.strokeWidth = dp(7f); c.drawPath(path, p)
+        p.color = scopeC; p.strokeWidth = dp(2.6f); c.drawPath(path, p)
+        p.strokeCap = Paint.Cap.BUTT
         val name = if (modo == 6) earMsg else if (modo == 5) cname(seqChord, seqMod) else if (cur >= 0) (if (modo == 4) nm(leadNote(cur)) else cname(cur, mod)) else "—"
         txt(name, visor.left + dp(16f), visor.top + dp(62f), 52f, nameC, Paint.Align.LEFT, true, true, visor.width() * 0.55f)
         if (cur >= 0 && modo != 4 && modo != 6) txt(notes(cur, mod).joinToString("  ") { nm(it) }, visor.right - dp(14f), visor.top + dp(24f), 12f, infoC, Paint.Align.RIGHT, true, false, visor.width() * 0.5f)
@@ -1072,37 +1267,52 @@ class HiChordView(ctx: Context, private val synth: Synth) : View(ctx) {
         if (page == 2) drawLoopStrip()
         }
         // joystick
-        p.style = Paint.Style.FILL; p.shader = null; p.color = panelC; c.drawCircle(jcx, jcy, jr * 1.1f, p)
+        p.style = Paint.Style.FILL; p.shader = null
+        p.color = mix(panelC, Color.BLACK, 0.38f); c.drawCircle(jcx, jcy + dp(3f), jr * 1.1f, p)
+        p.color = panelC; c.drawCircle(jcx, jcy, jr * 1.1f, p)
+        p.style = Paint.Style.STROKE; p.strokeWidth = dp(2f); p.color = Color.argb(60, 255, 243, 217)
+        c.drawCircle(jcx, jcy, jr * 0.62f, p)
+        p.style = Paint.Style.FILL
         val jl = if (modo == 4) JLL else JLP
         txt(jl[0], jcx, jcy - jr * 0.85f, 10f, grayC, Paint.Align.CENTER); txt(jl[1], jcx, jcy + jr * 1.0f, 10f, grayC, Paint.Align.CENTER)
         txt(jl[2], jcx + jr * 0.78f, jcy + dp(4f), 10f, grayC, Paint.Align.CENTER); txt(jl[3], jcx - jr * 0.78f, jcy + dp(4f), 10f, grayC, Paint.Align.CENTER)
         val kx = jcx + (if (abs(gx) > abs(jx)) gx else jx) * jr * 0.6f; val ky = jcy - (if (abs(gy) > abs(jy)) gy else jy) * jr * 0.6f
         p.style = Paint.Style.FILL
+        p.color = Color.argb(70, 0, 0, 0); c.drawCircle(kx, ky + dp(3f), jr * 0.32f, p)
         p.shader = LinearGradient(kx - jr * 0.3f, ky - jr * 0.3f, kx + jr * 0.3f, ky + jr * 0.3f, accent, accent2, Shader.TileMode.CLAMP)
         c.drawCircle(kx, ky, jr * 0.32f, p); p.shader = null
         // botões
         for (i in 0 until NB) {
             val hot = btnHot(i)
-            rr(btnR[i], dp(12f), if (hot) accent else panelC)
+            chunky(btnR[i], dp(14f), if (hot) accent else panelC, false, dp(3f))
             val label = btnLabel(i)
-            txt(label, btnR[i].centerX(), btnR[i].centerY() + dp(5f), 13f, if (hot) onAccent else Color.WHITE, Paint.Align.CENTER, false, hot, btnR[i].width() - dp(8f))
+            txt(label, btnR[i].centerX(), btnR[i].centerY() + dp(5f), 13f, if (hot) onAccent else creamC, Paint.Align.CENTER, false, hot, btnR[i].width() - dp(8f))
         }
-        // pads
+        // pads: um de cada cor, como os cabos de patch
         for (i in 0 until 7) {
             val on = i == (if (modo == 5) seqChord else cur)
-            rr(padR[i], dp(18f), if (on) accent else panelC)
-            txt(if (modo == 4) nm(leadNote(i)) else cname(i, mod), padR[i].centerX(), padR[i].centerY() + dp(2f), 19f, if (on) onAccent else Color.WHITE, Paint.Align.CENTER, false, true, padR[i].width() - dp(10f))
-            txt(ROM[i] + (if (padSeen) " · " + PADL[i] else ""), padR[i].centerX(), padR[i].centerY() + dp(22f), 11f, if (on) onAccent else grayC, Paint.Align.CENTER, false, false, padR[i].width() - dp(10f))
+            val face = if (on) mix(PADC[i], Color.WHITE, 0.45f) else PADC[i]
+            chunky(padR[i], dp(20f), face, on, dp(4f))
+            if (on) {
+                val o = dp(4f) * 0.7f
+                tmpR.set(padR[i].left, padR[i].top + o, padR[i].right, padR[i].bottom + o)
+                p.style = Paint.Style.STROKE; p.strokeWidth = dp(3f); p.color = creamC
+                c.drawRoundRect(tmpR, dp(20f), dp(20f), p); p.style = Paint.Style.FILL
+            }
+            val oy = if (on) dp(3f) else 0f
+            txt(if (modo == 4) nm(leadNote(i)) else cname(i, mod), padR[i].centerX(), padR[i].centerY() + dp(2f) + oy, 19f, onAccent, Paint.Align.CENTER, false, true, padR[i].width() - dp(10f))
+            txt(ROM[i] + (if (padSeen) " · " + PADL[i] else ""), padR[i].centerX(), padR[i].centerY() + dp(22f) + oy, 11f, Color.argb(190, 42, 26, 61), Paint.Align.CENTER, false, false, padR[i].width() - dp(10f))
         }
         // botão de modo (ocupa a 8ª célula da grade de pads)
-        rr(modeR, dp(18f), panelC)
+        chunky(modeR, dp(20f), panelC, false, dp(4f))
         txt("MODO" + (if (padSeen) " · Y" else ""), modeR.centerX(), modeR.centerY() - dp(10f), 11f, grayC, Paint.Align.CENTER, false, false, modeR.width() - dp(10f))
         txt(MODES[modo], modeR.centerX(), modeR.centerY() + dp(14f), 19f, accent, Paint.Align.CENTER, false, true, modeR.width() - dp(10f))
         if (navOn && navValid(navId)) {
             val r = navRect(navId)
-            p.style = Paint.Style.STROKE; p.strokeWidth = dp(3f); p.color = Color.WHITE; p.shader = null
             tmpR.set(r.left - dp(2f), r.top - dp(2f), r.right + dp(2f), r.bottom + dp(2f))
-            c.drawRoundRect(tmpR, dp(14f), dp(14f), p)
+            p.style = Paint.Style.STROKE; p.shader = null
+            p.strokeWidth = dp(6f); p.color = inkC; c.drawRoundRect(tmpR, dp(14f), dp(14f), p)
+            p.strokeWidth = dp(3f); p.color = Color.WHITE; c.drawRoundRect(tmpR, dp(14f), dp(14f), p)
             p.style = Paint.Style.FILL
         }
         if (helpOpen) drawHelp(c)
