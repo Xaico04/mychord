@@ -1,5 +1,15 @@
 # Histórico de mudanças
 
+## Novo visual "Lab" (instrumento de hardware, mais sério)
+
+- Placa lilás-acinzentada, **visor LCD preto com letras e osciloscópio em verde de fósforo**, aro claro em volta do visor.
+- **Joystick metálico** com botão branco.
+- Teclas claras e planas, com texto escuro e um pequeno traço de cor do grau; a tecla ativa fica verde-menta.
+- Botões de função coloridos por fileira (ciano, verde-limão, amarelo, lilás): cor cheia quando ligados, abafada quando desligados.
+- Tela de abertura minimalista (ondas verdes e o nome), sem mascote, planeta e cabos.
+- Novo ícone do app. O desenho do mascote e a opção `mascote.png` foram removidos.
+- Todas as cores ficam num bloco só em `HiChordView.kt` (`cores: paleta "Lab"`).
+
 ## Correção de áudio (estalos)
 
 O som ficou com estalos e menos limpo depois que entraram bateria, looper e efeitos. Causas encontradas e corrigidas em `Synth.kt`:

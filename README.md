@@ -1,6 +1,6 @@
 # 🎹 MyChord
 
-**Um instrumento musical de bolso para Android.** Toque acordes com um dedo, acrescente bateria, grave loops e até conecte um teclado MIDI. O app é nativo (Kotlin), sem anúncios, sem internet obrigatória e sem dependências pesadas.
+**Um instrumento musical de bolso para Android**, com visual de instrumento de hardware (placa lilás, joystick metálico, visor LCD verde e teclas claras). Toque acordes com um dedo, acrescente bateria, grave loops e até conecte um teclado MIDI. O app é nativo (Kotlin), sem anúncios, sem internet obrigatória e sem dependências pesadas.
 
 > Antigo **HiChord**. O nome interno do pacote continua `com.hichord.app` de propósito, para o botão *Atualizar* instalar por cima das versões antigas.
 
@@ -101,6 +101,12 @@ O que foi corrigido nos estalos está descrito em [CHANGELOG.md](CHANGELOG.md).
 
 ---
 
+## 🎨 Ajustando o visual
+
+Todas as cores ficam juntas no bloco `cores: paleta "Lab"` de `HiChordView.kt`: `accent` é o verde-menta do pad ativo, `padFaceC` as teclas, `panelC` os botões da placa, `visorC`/`nameC` o visor LCD e `BTNC` as quatro cores dos botões de função. Trocar um valor muda o app inteiro de uma vez.
+
+---
+
 ## 📁 Estrutura do projeto
 
 ```
@@ -110,7 +116,7 @@ app/src/main/java/com/hichord/app/
 ├── Synth.kt          # motor de áudio: vozes, bateria, looper, efeitos
 ├── MidiIO.kt         # MIDI por USB
 └── Updater.kt        # botão "Atualizar" (consulta as Releases do GitHub)
-app/src/main/res/     # ícone, mascote e cores
+app/src/main/res/     # ícone e cores do tema
 .github/workflows/    # build.yml: compila o APK e publica a Release
 docs/                 # manual de uso
 ```
@@ -130,4 +136,3 @@ Código sob **licença MIT** (arquivo [LICENSE](LICENSE)). Em resumo, **qualquer
 ## 💜 Créditos
 
 - Criado por **Xaico04**.
-- O visual "Synthos" é uma homenagem de fã ao episódio *"Gary's Synthesizer"* de *Apenas um Show*. Este projeto não tem relação com os criadores da série, e personagens, nomes e marcas citados pertencem aos seus respectivos donos. A licença MIT vale para o código e para a arte original do projeto, não para propriedade intelectual de terceiros.

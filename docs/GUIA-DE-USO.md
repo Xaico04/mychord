@@ -5,10 +5,9 @@
 - A tela abre sempre **deitada**. Ela só gira para vertical se a rotação automática do celular estiver **ligada**.
 - **Volume:** o app sempre toca em 100%. Use os botões de volume do celular.
 - **Acordes:** toque nos pads (graus I a VII). Arraste o dedo entre os pads, sem soltar, para trocar de acorde.
-- **Capa animada:** fecha sozinha em ~4 s (ou toque na tela). Toque no nome "MyChord" (canto superior esquerdo) para rever.
+- **Tela de abertura:** fecha sozinha em ~4 s (ou toque na tela). Toque no nome "MYCHORD" (canto superior esquerdo) para rever.
 - **Botão "?"** (canto superior direito): ajuda por seção (Início, Acordes, Modos, Efeitos, Bateria, Loop, MIDI, Controle).
 - **Fone com DAC USB:** conecte antes de abrir o app; o Android usa o DAC sozinho.
-- Quer uma imagem sua na capa? Salve como `app/src/main/assets/mascote.png` (quadrada, de preferência com fundo transparente) e gere o app de novo.
 
 ## Modos de toque (botão MODO, na última célula da grade de pads)
 
