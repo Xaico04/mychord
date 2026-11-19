@@ -802,7 +802,7 @@ class HiChordView(ctx: Context, private val synth: Synth) : View(ctx) {
 
     private fun openHelp() {
         ptrPad.clear(); syncTouch(); joyPtr = -1; jx = 0f; jy = 0f
-        navOn = false; helpOpen = true; helpScroll = 0f; refresh()
+        navOn = false; helpOpen = true; helpScroll = 0f; swallowUp = true; refresh()
     }
     fun closeHelp(): Boolean {
         if (!helpOpen) return false
@@ -1037,7 +1037,16 @@ class HiChordView(ctx: Context, private val synth: Synth) : View(ctx) {
         val m = hypot(dx, dy); if (m > 1f) { dx /= m; dy /= m }
         jx = dx; jy = -dy
     }
+    // Ajuda e capa abrem no DOWN do toque; sem isto, o UP do mesmo toque caía no "×" (que fica sobre o "?") e fechava na hora.
+    private var swallowUp = false
     override fun onTouchEvent(e: MotionEvent): Boolean {
+        if (swallowUp) {
+            when (e.actionMasked) {
+                MotionEvent.ACTION_DOWN -> swallowUp = false                       // toque novo: segue normal
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> { swallowUp = false; return true }
+                else -> return true
+            }
+        }
         if (splash) { if (e.actionMasked == MotionEvent.ACTION_UP) { splash = false; invalidate() }; return true }
         if (helpOpen) return helpTouch(e)
         if (e.actionMasked == MotionEvent.ACTION_DOWN) navOn = false
@@ -1067,7 +1076,7 @@ class HiChordView(ctx: Context, private val synth: Synth) : View(ctx) {
 
     private fun openSplash() {
         ptrPad.clear(); syncTouch(); joyPtr = -1; jx = 0f; jy = 0f
-        splash = true; splashT0 = SystemClock.uptimeMillis(); splashEnd = Long.MAX_VALUE
+        splash = true; swallowUp = true; splashT0 = SystemClock.uptimeMillis(); splashEnd = Long.MAX_VALUE
         refresh()
     }
 

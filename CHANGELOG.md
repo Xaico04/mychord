@@ -1,5 +1,9 @@
 # Histórico de mudanças
 
+## Correção: botão de ajuda
+
+- A ajuda (e a abertura, ao tocar no nome) fechava no mesmo instante em que abria: o toque que abria soltava em cima do "×", que fica na mesma posição do "?". Agora o fim do toque que abriu é ignorado.
+
 ## Novo visual "Lab" (instrumento de hardware, mais sério)
 
 - Placa lilás-acinzentada, **visor LCD preto com letras e osciloscópio em verde de fósforo**, aro claro em volta do visor.
